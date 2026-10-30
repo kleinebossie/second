@@ -386,7 +386,7 @@ class StockfishPool:
         """Analyze one position using an available engine worker.
 
         Borrow engine worker from queue.
-        If the engine process terminates or Position is invalid, recover and return fallback.
+        If the engine process stops or the board position is invalid, recover and return a fallback evaluation.
         Return healthy engine worker to queue after analysis completes.
         """
         try:

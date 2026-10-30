@@ -10,37 +10,12 @@ from __future__ import annotations
 import re
 from typing import Final
 
-# Advanced chess concepts and engine jargon prohibited for beginner level
-JARGON_WORDS: Final[list[str]] = [
-    "prophylaxis",
-    "zwischenzug",
-    "outpost",
-    "minority attack",
-    "centipawn",
-    "zugzwang",
-    "fianchetto",
-    "desperado",
-    "hypermodern",
-    "opposition",
-    "triangulation",
-    "liquidation",
-    "overloading",
-    "deflection",
-    "decoy",
-    "intermezzo",
-    "en prise",
-    "luft",
-    "priyome",
-    "tabiya",
-    "eval",
-    "stockfish",
-    "engine",
-    "depth",
-]
+from rewards.checks import ENGINE_JARGON_WORDS, EVAL_NUMBER_RE
+from rewards.scorer import CHESS_JARGON_WORDS
 
-# Evaluation numbers regex (signed numbers or standalone decimals)
-EVAL_NUMBER_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:[+-]\d+(?:\.\d+)?|\b\d+\.\d+)\b"
+# Combined chess concepts and engine jargon prohibited for beginner level
+JARGON_WORDS: Final[list[str]] = list(
+    dict.fromkeys(CHESS_JARGON_WORDS + ENGINE_JARGON_WORDS)
 )
 
 

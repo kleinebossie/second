@@ -30,6 +30,7 @@ from .filter_comments import (
     FilterStats,
     assign_detail_and_truncate,
     filter_comment,
+    pre_filter_comment,
 )
 from .label_levels import (
     label_level,
@@ -59,6 +60,7 @@ def run_pipeline(
     rl_input_path: Path | str | None = None,
     output_dir: Path | str = DEFAULT_PROCESSED_DIR,
     public_dir: Path | str = DEFAULT_PUBLIC_DIR,
+    export_dir: Path | str | None = None,
     cache_path: Path | str | None = None,
     drive_dir: Path | str | None = None,
     stockfish_path: str | Path | None = None,
@@ -110,72 +112,26 @@ def run_pipeline(
     if sft_records:
         LOGGER.info("Pre-filtering SFT records before Stockfish analysis")
         filter_stats = FilterStats()
-        seen_fps: set[str] = set()
+        pre_seen_fps: set[str] = set()
+        pre_seen_shingles: list[set[tuple[str, ...]]] = []
         pre_filtered_sft: list[tuple[dict[str, Any], str]] = []
 
         if filter_sft:
-            from langdetect import detect as _detect_lang
-            from .filter_comments import (
-                HANDLE_RE,
-                LINK_RE,
-                clean_comment,
-                compute_fingerprint,
-                has_chess_content,
-                has_offensive_content,
-            )
-            from rewards.checks import check_legal_moves, check_piece_on_square
-
             for rec in sft_records:
-                filter_stats.total_input += 1
                 comment = rec.get("comment", "")
                 fen = rec.get("fen", "")
                 move_uci = rec.get("move_uci")
 
-                cleaned = clean_comment(comment)
-                if len(cleaned.split()) < 8:
-                    filter_stats.cleaned_empty_or_short += 1
-                    continue
-
-                try:
-                    if _detect_lang(cleaned) != "en":
-                        filter_stats.not_english += 1
-                        continue
-                except Exception:
-                    filter_stats.not_english += 1
-                    continue
-
-                if not has_chess_content(cleaned):
-                    filter_stats.no_chess_content += 1
-                    continue
-
-                try:
-                    b_check = chess.Board(fen)
-                    if not b_check.is_valid():
-                        filter_stats.illegal_move_or_wrong_piece += 1
-                        continue
-                    if move_uci:
-                        m_check = chess.Move.from_uci(move_uci)
-                        if m_check not in b_check.legal_moves:
-                            filter_stats.illegal_move_or_wrong_piece += 1
-                            continue
-                except Exception:
-                    filter_stats.illegal_move_or_wrong_piece += 1
-                    continue
-
-                if not check_piece_on_square(text=cleaned, fen=fen, move_uci=move_uci).passed:
-                    filter_stats.illegal_move_or_wrong_piece += 1
-                    continue
-
-                if LINK_RE.search(cleaned) or HANDLE_RE.search(cleaned) or has_offensive_content(cleaned):
-                    filter_stats.links_usernames_offensive += 1
-                    continue
-
-                fp = compute_fingerprint(cleaned)
-                if fp in seen_fps:
-                    filter_stats.duplicate += 1
-                    continue
-
-                pre_filtered_sft.append((rec, cleaned))
+                passed, reason, cleaned = pre_filter_comment(
+                    text=comment,
+                    fen=fen,
+                    move_uci=move_uci,
+                    seen_fingerprints=pre_seen_fps,
+                    seen_shingles=pre_seen_shingles,
+                    stats=filter_stats,
+                )
+                if passed:
+                    pre_filtered_sft.append((rec, cleaned))
         else:
             for rec in sft_records:
                 pre_filtered_sft.append((rec, rec.get("comment", "")))
@@ -215,11 +171,6 @@ def run_pipeline(
                     filter_stats.tone_disagrees_with_verdict += 1
                     continue
 
-                fp = compute_fingerprint(cleaned)
-                if fp in seen_fps:
-                    filter_stats.duplicate += 1
-                    continue
-                seen_fps.add(fp)
                 filter_stats.kept += 1
 
                 detail_items = assign_detail_and_truncate(cleaned)
@@ -277,7 +228,8 @@ def run_pipeline(
         report["rl_prompts_generated"] = rl_stats["count"]
 
     # Step 3: Prepare Hugging Face export package
-    exp_dir = prepare_hf_export(public_dir=pub_path)
+    exp_path = Path(export_dir) if export_dir is not None else out_path / "hf_export"
+    exp_dir = prepare_hf_export(public_dir=pub_path, export_dir=exp_path)
     report["export_directory"] = str(exp_dir)
 
     # Step 4: Optional Hugging Face upload
@@ -308,6 +260,7 @@ def main() -> None:
     parser.add_argument("--rl-input", type=str, default=None, help="Input JSONL file of CC0 Lichess game positions.")
     parser.add_argument("--output-dir", type=str, default=str(DEFAULT_PROCESSED_DIR), help="Output directory for full splits.")
     parser.add_argument("--public-dir", type=str, default=str(DEFAULT_PUBLIC_DIR), help="Output directory for public splits.")
+    parser.add_argument("--export-dir", type=str, default=None, help="Output directory for Hugging Face export package.")
     parser.add_argument("--cache-path", type=str, default=None, help="Path to Stockfish Parquet cache file.")
     parser.add_argument("--drive-dir", type=str, default=None, help="Google Drive sync directory.")
     parser.add_argument("--stockfish-path", type=str, default=None, help="Path to Stockfish executable.")
@@ -325,6 +278,7 @@ def main() -> None:
         rl_input_path=args.rl_input,
         output_dir=args.output_dir,
         public_dir=args.public_dir,
+        export_dir=args.export_dir,
         cache_path=args.cache_path,
         drive_dir=args.drive_dir,
         stockfish_path=args.stockfish_path,

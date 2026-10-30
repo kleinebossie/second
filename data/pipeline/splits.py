@@ -26,6 +26,16 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_PUBLIC_DIR = Path("data/processed/public")
 
 
+def normalize_fen(fen: str) -> str:
+    """Normalize a FEN string to its four-field board state.
+
+    Extract piece placement, active color, castling rights, and en passant square.
+    Omit halfmove clock and fullmove number.
+    Return normalized four-field string.
+    """
+    return " ".join(fen.split()[:4])
+
+
 def hash_game_id(game_id: str, seed: int = 42) -> float:
     """Compute a deterministic hash value in range zero to one for a game identifier.
 
@@ -66,7 +76,7 @@ def split_by_game(
         games_records[gid].append(rec)
         fen = rec.get("fen")
         if fen:
-            game_fens[gid].add(fen)
+            game_fens[gid].add(normalize_fen(fen))
 
     # Initial deterministic assignment by game_id hash
     game_splits: dict[str, str] = {}
@@ -103,16 +113,17 @@ def split_by_game(
     for gid, split_name in game_splits.items():
         for rec in games_records[gid]:
             fen = rec.get("fen")
-            if split_name == "val" and fen in train_fens:
+            norm_fen = normalize_fen(fen) if fen else ""
+            if split_name == "val" and norm_fen in train_fens:
                 continue
-            if split_name == "test_pool" and (fen in train_fens or fen in val_fens):
+            if split_name == "test_pool" and (norm_fen in train_fens or norm_fen in val_fens):
                 continue
             splits[split_name].append(rec)
 
     # Verify invariants
-    train_fens_final = {r["fen"] for r in splits["train"] if "fen" in r}
-    val_fens_final = {r["fen"] for r in splits["val"] if "fen" in r}
-    test_fens_final = {r["fen"] for r in splits["test_pool"] if "fen" in r}
+    train_fens_final = {normalize_fen(r["fen"]) for r in splits["train"] if "fen" in r}
+    val_fens_final = {normalize_fen(r["fen"]) for r in splits["val"] if "fen" in r}
+    test_fens_final = {normalize_fen(r["fen"]) for r in splits["test_pool"] if "fen" in r}
 
     overlap_train_test = train_fens_final & test_fens_final
     overlap_train_val = train_fens_final & val_fens_final

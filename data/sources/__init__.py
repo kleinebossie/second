@@ -22,6 +22,7 @@ from .lichess_games import (
 from .lichess_studies import (
     collect_lichess_studies,
     detect_study_license,
+    extract_study_id,
     fetch_lichess_study,
     parse_study_pgn,
     strip_lichess_tags,
@@ -53,6 +54,7 @@ __all__ = [
     "parse_gameknot_html",
     "fetch_gameknot_direct",
     "stream_waterhorse_records",
+    "extract_study_id",
     "collect_lichess_studies",
     "parse_study_pgn",
     "fetch_lichess_study",

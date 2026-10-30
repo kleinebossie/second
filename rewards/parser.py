@@ -53,10 +53,10 @@ PIECE_NAME_MAP: Final[dict[str, str]] = {
     "kings": "king",
 }
 
-# Regex to find piece followed by square (e.g. "the knight on e5", "bishop at c4", "bishop to c4")
+# Regex to find piece followed by square (e.g. "the knight on e5", "bishop at c4")
 PIECE_THEN_SQUARE_RE: Final[re.Pattern[str]] = re.compile(
     r"\b(?:the\s+|a\s+|an\s+)?(?:white\s+|black\s+)?(pawn|knight|bishop|rook|queen|king)s?\s+"
-    r"(?:on|at|to|onto|into)\s+(?:the\s+)?(?:square\s+)?([a-h][1-8])\b",
+    r"(?:on|at)\s+(?:the\s+)?(?:square\s+)?([a-h][1-8])\b",
     re.IGNORECASE,
 )
 
@@ -108,7 +108,6 @@ POSITIVE_TONE_PHRASES: Final[list[str]] = [
     "fine move",
     "sharp move",
     "sound move",
-    "winning",
 ]
 
 NEGATIVE_TONE_PHRASES: Final[list[str]] = [

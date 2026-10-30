@@ -24,6 +24,7 @@ from data.sources import (
     collect_lichess_games,
     collect_lichess_studies,
     detect_study_license,
+    extract_study_id,
     format_moves_up_to,
     is_acceptable_rating,
     make_record,
@@ -37,6 +38,9 @@ from data.sources import (
     strip_lichess_tags,
     validate_record,
 )
+from data.sources.gameknot import _iter_waterhorse_lines
+from data.sources.lichess_studies import _iter_csv_rows
+from data.sources.mate import _format_mate_explanation
 
 
 def test_schema_make_and_validate() -> None:
@@ -217,12 +221,33 @@ def test_detect_study_license() -> None:
     """Test license detection logic for Lichess studies.
 
     Verify that open license keywords set redistributable to True.
+    Verify that restrictive variants set redistributable to False.
     Verify that standard studies receive Lichess Terms of Service.
     """
     headers_cc0 = chess.pgn.Headers({"License": "Creative Commons CC0 1.0 Universal"})
     lic, redist = detect_study_license(headers_cc0)
     assert lic == "CC0-1.0"
     assert redist is True
+
+    headers_cc_by = chess.pgn.Headers({"License": "CC-BY-SA 4.0"})
+    lic_by, redist_by = detect_study_license(headers_cc_by)
+    assert lic_by == "CC-BY"
+    assert redist_by is True
+
+    headers_nc = chess.pgn.Headers({"License": "CC-BY-NC 4.0"})
+    lic_nc, redist_nc = detect_study_license(headers_nc)
+    assert lic_nc == "Lichess Terms of Service"
+    assert redist_nc is False
+
+    headers_nd = chess.pgn.Headers({"License": "CC-BY-ND 3.0"})
+    lic_nd, redist_nd = detect_study_license(headers_nd)
+    assert lic_nd == "Lichess Terms of Service"
+    assert redist_nd is False
+
+    headers_noncomm = chess.pgn.Headers({"Remark": "Creative Commons non-commercial license"})
+    lic_noncomm, redist_noncomm = detect_study_license(headers_noncomm)
+    assert lic_noncomm == "Lichess Terms of Service"
+    assert redist_noncomm is False
 
     headers_tos = chess.pgn.Headers({"Event": "My private study"})
     lic_tos, redist_tos = detect_study_license(headers_tos)
@@ -257,7 +282,7 @@ def test_parse_study_pgn() -> None:
 
     r0 = records[0]
     assert r0["source"] == "lichess_studies"
-    assert r0["game_id"] == "WLyfoXTJ_xdA6LWme"
+    assert r0["game_id"] == "WLyfoXTJ"
     assert r0["move_san"] == "Ng5"
     assert r0["comment"] == "Fried Liver line"
     assert r0["license"] == "Lichess Terms of Service"
@@ -285,6 +310,30 @@ def test_parse_study_require_open_license() -> None:
     assert records[0]["redistributable"] is True
 
 
+def test_extract_study_id() -> None:
+    """Test study ID extraction from headers.
+
+    If a URL with a chapter ID is present, return only the study ID.
+    If a URL without a chapter ID is present, return the study ID.
+    When no URL is present, return the fallback or generated hash.
+    """
+    headers_with_chap = chess.pgn.Headers(
+        {"Site": "https://lichess.org/study/WLyfoXTJ/xdA6LWme"}
+    )
+    assert extract_study_id(headers_with_chap) == "WLyfoXTJ"
+
+    headers_without_chap = chess.pgn.Headers(
+        {"Site": "https://lichess.org/study/ABC12345"}
+    )
+    assert extract_study_id(headers_without_chap) == "ABC12345"
+
+    headers_empty = chess.pgn.Headers({})
+    assert extract_study_id(headers_empty, fallback="fallback_key") == "fallback_key"
+
+    generated = extract_study_id(headers_empty)
+    assert len(generated) == 16
+
+
 def test_mate_parse_entry_tactic() -> None:
     """Test parsing a tactic record from the MATE dataset.
 
@@ -309,8 +358,36 @@ def test_mate_parse_entry_tactic() -> None:
     assert record["fen"] == "8/8/8/7R/8/1BP3kP/Pr6/6K1 b - - 0 36"
     assert record["move_uci"] == "b2b1"
     assert record["move_san"] == "Rb1+"
+    assert "Tactical line: Rb1+ Bd1 Rxd1#" in record["comment"]
     assert "Checkmate!" in record["comment"]
     assert validate_record(record) is True
+
+
+def test_mate_parse_entry_strategy_and_tactic() -> None:
+    """Test converting UCI tactic sequences to SAN alongside strategy text.
+
+    Provide an entry with strategic text and a tactic sequence.
+    Verify that the UCI moves convert to SAN.
+    Verify that the explanation combines both texts cleanly.
+    """
+    entry = {
+        "instruction": "Expert chess player.",
+        "input": (
+            'The FEN of the given chess board is "8/8/8/7R/8/1BP3kP/Pr6/6K1 b - - 0 36". '
+            "Which move is better? "
+            "MoveA:b2b1,Displace the piece to a more promising position, "
+            "strengthening its board authority. TacticA: b2b1 b3d1 b1d1 Checkmate! "
+            "MoveB:g3f4,Wait for the opponent. "
+        ),
+        "output": "MoveA:b2b1",
+    }
+    record = parse_mate_entry(entry)
+    assert record is not None
+    assert record["move_san"] == "Rb1+"
+    assert (
+        record["comment"]
+        == "Displace the piece to a more promising position, strengthening its board authority. Tactical line: Rb1+ Bd1 Rxd1# Checkmate!"
+    )
 
 
 def test_mate_parse_entry_strategy() -> None:
@@ -350,6 +427,46 @@ def test_mate_parse_illegal_move() -> None:
         "output": "MoveA:e2e8",
     }
     assert parse_mate_entry(entry) is None
+
+
+def test_mate_parse_output_matching() -> None:
+    """Test candidate move selection from MATE output field.
+
+    Verify that anchored MoveA and MoveB prefixes select the correct candidate.
+    Verify that bare UCI move strings select the correct candidate.
+    Verify that ambiguous outputs mentioning both candidates return None.
+    """
+    base_entry = {
+        "instruction": "Expert chess player.",
+        "input": (
+            'The FEN of the given chess board is "8/8/8/7R/8/1BP3kP/Pr6/6K1 b - - 0 36". '
+            "Which move is better? "
+            "MoveA:b2b1 Rook checks the king. "
+            "MoveB:g3f4 King moves to safety. "
+        ),
+    }
+
+    # Anchored MoveA match
+    entry_a = {**base_entry, "output": "MoveA:b2b1"}
+    rec_a = parse_mate_entry(entry_a)
+    assert rec_a is not None
+    assert rec_a["move_uci"] == "b2b1"
+
+    # Bare UCI match
+    entry_uci = {**base_entry, "output": "b2b1"}
+    rec_uci = parse_mate_entry(entry_uci)
+    assert rec_uci is not None
+    assert rec_uci["move_uci"] == "b2b1"
+
+    # Anchored MoveB match even when MoveA is mentioned later
+    entry_b_anchored = {**base_entry, "output": "MoveB is superior to MoveA"}
+    rec_b = parse_mate_entry(entry_b_anchored)
+    assert rec_b is not None
+    assert rec_b["move_uci"] == "g3f4"
+
+    # Ambiguous output without anchored start
+    entry_ambiguous = {**base_entry, "output": "Consider MoveA or MoveB carefully"}
+    assert parse_mate_entry(entry_ambiguous) is None
 
 
 def test_mate_stream_from_zip() -> None:
@@ -455,3 +572,42 @@ def test_lichess_games_collect_offline(tmp_path: Path) -> None:
         assert record["source"] == "lichess_games"
         assert record["white_elo"] == 1600
         assert record["black_elo"] == 1650
+
+
+def test_iter_csv_rows() -> None:
+    """Test reading CSV rows from raw and compressed bytes.
+
+    Verify that plain text CSV bytes yield rows after the header.
+    Verify that gzip compressed CSV bytes yield rows after the header.
+    """
+    import gzip
+
+    csv_text = "text,other\n1. e4 e5,sample1\n1. d4 d5,sample2\n"
+    plain_bytes = csv_text.encode("utf-8")
+    rows_plain = list(_iter_csv_rows(plain_bytes))
+    assert len(rows_plain) == 2
+    assert rows_plain[0][0] == "1. e4 e5"
+    assert rows_plain[1][0] == "1. d4 d5"
+
+    gz_bytes = gzip.compress(plain_bytes)
+    rows_gz = list(_iter_csv_rows(gz_bytes))
+    assert len(rows_gz) == 2
+    assert rows_gz[0][0] == "1. e4 e5"
+
+
+def test_iter_waterhorse_lines() -> None:
+    """Test line filtering and parsing for Waterhorse data.
+
+    Verify that non-GameKnot lines are skipped.
+    Verify that byte lines and string lines are parsed.
+    """
+    lines = [
+        b'{"metadata": {"pipeline_key": "gameknot_game_111"}, "text": "1. e4 e5 *"}',
+        '{"metadata": {"pipeline_key": "lichess_game_222"}, "text": "1. d4 d5 *"}',
+        b'{"metadata": {}, "text": "1. c4 c5 *"}',
+        '{"metadata": {"pipeline_key": "other"}, "text": "[Site \\"http://gameknot.com/\\"] 1. Nf3 *"}',
+    ]
+    pairs = list(_iter_waterhorse_lines(lines))
+    assert len(pairs) == 2
+    assert pairs[0][1] == "gameknot_game_111"
+    assert "gameknot.com" in pairs[1][0]

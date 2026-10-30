@@ -6,6 +6,10 @@ It checks move legality, grounding, piece squares, tone, formatting, and rewards
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import chess
 import pytest
 
@@ -113,6 +117,12 @@ def test_parse_piece_square_pairs() -> None:
     assert ("pawn", "f7") in pairs
     assert ("king", "e8") in pairs
 
+    # Verify that dynamic move destinations are not classified as static pieces
+    move_text = "White develops the bishop to c4 and moves the knight to f3."
+    move_pairs = parse_piece_square_pairs(move_text)
+    assert ("bishop", "c4") not in move_pairs
+    assert ("knight", "f3") not in move_pairs
+
 
 def test_find_tone_words() -> None:
     """Verify detection of positive and negative verdict words."""
@@ -127,6 +137,12 @@ def test_find_tone_words() -> None:
     assert "blunder" in bad_tones["negative"]
     assert "mistake" in bad_tones["negative"]
     assert "terrible" in bad_tones["negative"]
+
+    # Verify that standalone winning does not trigger positive praise
+    eval_text = "White is winning after this blunder."
+    eval_tones = find_tone_words(eval_text)
+    assert "winning" not in eval_tones["positive"]
+    assert "winning move" in find_tone_words("This is a winning move.")["positive"]
 
 
 # --- 2. Hard Checks Tests ---
@@ -419,3 +435,104 @@ def test_compute_reward_success() -> None:
     assert res.hard_checks["legal_moves"].passed is True
     assert res.hard_checks["grounded_moves"].passed is True
     assert res.hard_checks["format"].passed is True
+
+
+def test_human_commentary_reward_distribution() -> None:
+    """Verify reward distribution on human commentary examples.
+
+    Check compute_reward on grounded human explanations.
+    If sft_train.jsonl exists, sample up to 500 records.
+    Verify that hard checks produce zero false alarms.
+    Verify that mean soft score is at least 0.60.
+    """
+    human_samples = [
+        (
+            "White develops the bishop to c4 and attacks the sensitive f7 square. Best move is Bc4.",
+            ITALIAN_FEN,
+            "club",
+            "short",
+            "Good",
+            "Bc4",
+            ["Bc4 develops bishop to c4.", "White attacks f7."],
+            "FEN: ... Move played: Bc4.\nVerdict: Good.\nBest move: Bc4.\nFacts:\n- Bc4 develops bishop to c4.",
+        ),
+        (
+            "White attacks the pawn on f7 with two active pieces. Black defends with d5.",
+            ITALIAN_FEN,
+            "beginner",
+            "short",
+            "Good",
+            "Ng5",
+            ["After Ng5, Black plays d5.", "White attacks f7."],
+            "FEN: ... Move played: Ng5.\nVerdict: Good.\nBest move: Ng5.\nFacts:\n- After Ng5, Black plays d5.",
+        ),
+    ]
+
+    for text, fen, level, detail, verdict, best_san, facts, prompt in human_samples:
+        res = compute_reward(
+            text=text,
+            fen=fen,
+            level=level,
+            detail=detail,
+            verdict=verdict,
+            best_move_san=best_san,
+            facts=facts,
+            prompt_text=prompt,
+        )
+        assert res.passed_all_hard is True
+        assert res.reward >= 0.60
+
+    sft_train_path = Path("data/processed/sft_train.jsonl")
+    if sft_train_path.exists():
+        records: list[dict[str, Any]] = []
+        with open(sft_train_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+                if len(records) >= 500:
+                    break
+
+        assert len(records) > 0
+
+        legal_fails = 0
+        piece_fails = 0
+        tone_fails = 0
+        format_fails = 0
+        soft_scores: list[float] = []
+
+        for r in records:
+            c = r.get("comment", "")
+            fen = r.get("fen", "")
+            move_uci = r.get("move_uci")
+            facts = r.get("facts", [])
+            verdict = r.get("verdict", "Good")
+            prompt = r.get("user_message", "")
+            level = r.get("level", "club")
+            detail = r.get("detail", "short")
+
+            # Check hard rules
+            if not check_legal_moves(text=c, fen=fen, move_uci=move_uci, facts=facts).passed:
+                legal_fails += 1
+            if not check_piece_on_square(text=c, fen=fen, move_uci=move_uci).passed:
+                piece_fails += 1
+            if not check_verdict_tone(text=c, verdict=verdict).passed:
+                tone_fails += 1
+            if not check_format(text=c, prompt_text=prompt).passed:
+                format_fails += 1
+
+            # Check soft scores
+            s_len = score_length(text=c, detail=detail)
+            s_lvl = score_level_fit(text=c, level=level)
+            s_nc = score_not_copied(text=c, facts=facts)
+            s_nr = score_no_repeats(text=c)
+            mean_soft = (s_len + s_lvl + s_nc + s_nr) / 4.0
+            soft_scores.append(mean_soft)
+
+        assert legal_fails == 0
+        assert piece_fails == 0
+        assert tone_fails == 0
+        assert format_fails == 0
+        mean_soft_score = sum(soft_scores) / len(soft_scores)
+        assert mean_soft_score >= 0.60
+

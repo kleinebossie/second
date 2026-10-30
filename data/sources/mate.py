@@ -39,6 +39,55 @@ MATE_TESTSET_URL = (
 )
 
 
+def _format_mate_explanation(fen: str, raw_exp: str) -> str:
+    """Convert UCI tactic move sequences in MATE explanation to SAN.
+
+    Find any tactic prefix followed by UCI moves.
+    Convert legal UCI moves into standard algebraic notation on the board.
+    Combine the converted line with surrounding explanation text.
+    Return the formatted explanation string.
+    """
+    match = re.search(
+        r"\b(?:tactic(?:[ab])?)[:,\s]+\s*([a-h][1-8][a-h][1-8][qrbn]?(?:[\s,]+[a-h][1-8][a-h][1-8][qrbn]?)*)",
+        raw_exp,
+        re.IGNORECASE,
+    )
+    if not match:
+        return re.sub(r"\s+", " ", raw_exp).strip()
+
+    before = raw_exp[: match.start()].strip()
+    after = raw_exp[match.end() :].strip()
+    uci_sequence = match.group(1)
+    uci_tokens = re.findall(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b", uci_sequence)
+
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return re.sub(r"\s+", " ", raw_exp).strip()
+
+    san_moves: list[str] = []
+    for uci in uci_tokens:
+        try:
+            move = chess.Move.from_uci(uci.lower())
+        except ValueError:
+            break
+        if move not in board.legal_moves:
+            break
+        san_moves.append(board.san(move))
+        board.push(move)
+
+    if san_moves:
+        joined_san = " ".join(san_moves)
+        line_text = f"Tactical line: {joined_san}"
+        parts = [part for part in (before, line_text, after) if part]
+        result = " ".join(parts)
+    else:
+        parts = [part for part in (before, after) if part]
+        result = " ".join(parts)
+
+    return re.sub(r"\s+", " ", result).strip()
+
+
 def parse_mate_entry(entry: dict[str, Any]) -> ChessRecord | None:
     """Parse a single MATE dataset dictionary into a chess record.
 
@@ -79,11 +128,17 @@ def parse_mate_entry(entry: dict[str, Any]) -> ChessRecord | None:
     uci_b = match_b.group(1).lower()
     exp_b = match_b.group(2).strip()
 
-    out_lower = output_text.lower()
-    if "movea" in out_lower or uci_a in out_lower:
+    out_lower = output_text.strip().lower()
+    if re.match(r"^\s*move\s*a\b", out_lower) or out_lower == uci_a:
         win_uci = uci_a
         win_exp = exp_a
-    elif "moveb" in out_lower or uci_b in out_lower:
+    elif re.match(r"^\s*move\s*b\b", out_lower) or out_lower == uci_b:
+        win_uci = uci_b
+        win_exp = exp_b
+    elif "movea" in out_lower and "moveb" not in out_lower:
+        win_uci = uci_a
+        win_exp = exp_a
+    elif "moveb" in out_lower and "movea" not in out_lower:
         win_uci = uci_b
         win_exp = exp_b
     else:
@@ -103,13 +158,7 @@ def parse_mate_entry(entry: dict[str, Any]) -> ChessRecord | None:
         return None
 
     san = board.san(move)
-    # Clean raw UCI tactic move lists if present in MATE explanations
-    cleaned_exp = re.sub(
-        r"\b(?:tactic|Tactic[AB]):?\s*(?:[a-h][1-8][a-h][1-8][qrbn]?\s*)+",
-        " ",
-        win_exp,
-    )
-    cleaned_exp = re.sub(r"\s+", " ", cleaned_exp).strip()
+    cleaned_exp = _format_mate_explanation(fen, win_exp)
     if not cleaned_exp:
         return None
 

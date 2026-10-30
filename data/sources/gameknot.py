@@ -14,7 +14,7 @@ import json
 import os
 import re
 import urllib.parse
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -306,6 +306,45 @@ def fetch_gameknot_direct(game_id: str | int, timeout: int = 10) -> list[ChessRe
         return []
 
 
+def _iter_waterhorse_lines(lines: Iterable[str | bytes]) -> Iterator[tuple[str, str]]:
+    """Yield PGN text and key pairs from Waterhorse lines.
+
+    If a line contains bytes, decode it as UTF-8.
+    Skip empty lines and invalid JSON records.
+    Check if the entry comes from GameKnot.
+    If the entry is valid GameKnot content, yield the text and pipeline key.
+    """
+    for raw in lines:
+        if isinstance(raw, bytes):
+            try:
+                line = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+        else:
+            line = raw
+
+        line = line.strip()
+        if not line:
+            continue
+
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        text = payload.get("text", "")
+        meta = payload.get("metadata") or {}
+        key = str(payload.get("pipeline_key") or meta.get("pipeline_key", ""))
+
+        is_gameknot = (
+            key.startswith("gameknot_game_")
+            or "gameknot" in key.lower()
+            or "gameknot.com" in text.lower()
+        )
+        if is_gameknot and text:
+            yield text, key
+
+
 def stream_waterhorse_records(
     urls: list[str] | None = None,
     max_games: int | None = None,
@@ -321,84 +360,37 @@ def stream_waterhorse_records(
     if urls is None:
         urls = WATERHORSE_URLS
 
+    def _generate_pairs() -> Iterator[tuple[str, str]]:
+        if cache_file and cache_file.exists():
+            with cache_file.open("r", encoding="utf-8") as file:
+                yield from _iter_waterhorse_lines(file)
+            return
+
+        for url in urls:
+            try:
+                with requests.get(url, stream=True, timeout=30) as response:
+                    if response.status_code != 200:
+                        continue
+                    yield from _iter_waterhorse_lines(response.iter_lines())
+            except requests.RequestException:
+                continue
+
     games_processed = 0
     items_yielded = 0
 
-    if cache_file and cache_file.exists():
-        with cache_file.open("r", encoding="utf-8") as file:
-            for line in file:
-                if not line.strip():
-                    continue
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                text = payload.get("text", "")
-                meta = payload.get("metadata", {})
-                key = str(payload.get("pipeline_key") or meta.get("pipeline_key", ""))
-
-                is_gameknot = (
-                    key.startswith("gameknot_game_")
-                    or "gameknot" in key.lower()
-                    or "gameknot.com" in text.lower()
-                )
-                if not is_gameknot:
-                    continue
-
-                records = parse_gameknot_pgn(text, fallback_id=key)
-                if not records:
-                    continue
-
-                games_processed += 1
-                for record in records:
-                    yield record
-                    items_yielded += 1
-                    if max_items is not None and items_yielded >= max_items:
-                        return
-                if max_games is not None and games_processed >= max_games:
-                    return
-        return
-
-    for url in urls:
-        try:
-            with requests.get(url, stream=True, timeout=30) as response:
-                if response.status_code != 200:
-                    continue
-                for raw_line in response.iter_lines():
-                    if not raw_line:
-                        continue
-                    try:
-                        payload = json.loads(raw_line.decode("utf-8"))
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-
-                    text = payload.get("text", "")
-                    meta = payload.get("metadata", {})
-                    key = str(meta.get("pipeline_key", ""))
-
-                    is_gameknot = (
-                        key.startswith("gameknot_game_")
-                        or "gameknot" in key.lower()
-                        or "gameknot.com" in text.lower()
-                    )
-                    if not is_gameknot:
-                        continue
-
-                    records = parse_gameknot_pgn(text, fallback_id=key)
-                    if not records:
-                        continue
-
-                    games_processed += 1
-                    for record in records:
-                        yield record
-                        items_yielded += 1
-                        if max_items is not None and items_yielded >= max_items:
-                            return
-                    if max_games is not None and games_processed >= max_games:
-                        return
-        except requests.RequestException:
+    for text, key in _generate_pairs():
+        records = parse_gameknot_pgn(text, fallback_id=key)
+        if not records:
             continue
+
+        games_processed += 1
+        for record in records:
+            yield record
+            items_yielded += 1
+            if max_items is not None and items_yielded >= max_items:
+                return
+        if max_games is not None and games_processed >= max_games:
+            return
 
 
 def collect_gameknot(

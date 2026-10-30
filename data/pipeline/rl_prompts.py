@@ -29,11 +29,13 @@ try:
         StockfishAnalyzer,
         StockfishCache,
     )
+    from .splits import normalize_fen
 except ImportError:
     from data.pipeline.analyse import (  # type: ignore
         StockfishAnalyzer,
         StockfishCache,
     )
+    from data.pipeline.splits import normalize_fen  # type: ignore
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PROCESSED_DIR = Path("data/processed")
@@ -65,13 +67,15 @@ def load_excluded_keys(
                         if item.get("game_id"):
                             excluded_games.add(str(item["game_id"]))
                         if item.get("fen"):
-                            excluded_fens.add(str(item["fen"]))
+                            excluded_fens.add(normalize_fen(str(item["fen"])))
         elif parquet_path.exists():
             df = pd.read_parquet(parquet_path)
             if "game_id" in df.columns:
                 excluded_games.update(df["game_id"].dropna().astype(str).tolist())
             if "fen" in df.columns:
-                excluded_fens.update(df["fen"].dropna().astype(str).tolist())
+                excluded_fens.update(
+                    normalize_fen(f) for f in df["fen"].dropna().astype(str).tolist()
+                )
 
     LOGGER.info(
         "Loaded exclusions: %d game IDs and %d FENs",
@@ -113,7 +117,7 @@ def build_rl_prompts_from_evaluated(
 
         if gid and gid in ex_games:
             continue
-        if fen in ex_fens:
+        if fen and normalize_fen(fen) in ex_fens:
             continue
 
         eval_before = item.get("eval_before")
@@ -364,7 +368,7 @@ def generate_rl_prompts(
     for cand in raw_candidates:
         gid = str(cand.get("game_id", ""))
         fen = str(cand.get("fen", ""))
-        if (gid and gid in excluded_games) or (fen in excluded_fens):
+        if (gid and gid in excluded_games) or (fen and normalize_fen(fen) in excluded_fens):
             continue
         valid_candidates.append(cand)
 

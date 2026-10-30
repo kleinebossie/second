@@ -20,9 +20,12 @@ from data.pipeline.filter_comments import (
     FilterStats,
     assign_detail_and_truncate,
     clean_comment,
+    compute_shingles,
     filter_comment,
     has_chess_content,
     has_offensive_content,
+    is_near_duplicate,
+    pre_filter_comment,
     truncate_to_sentences,
 )
 from data.pipeline.label_levels import (
@@ -253,6 +256,83 @@ def test_filter_duplicate() -> None:
     assert stats.kept == 1
 
 
+def test_filter_near_duplicate() -> None:
+    """Verify rejection of near duplicate comments."""
+    seen_fps: set[str] = set()
+    seen_shingles: list[set[tuple[str, ...]]] = []
+    stats = FilterStats()
+
+    text1 = (
+        "White develops the bishop to c4 aiming at the sensitive f7 square and preparing castling."
+    )
+    kept1, reason1, _ = filter_comment(
+        text=text1,
+        fen=ITALIAN_FEN,
+        seen_fingerprints=seen_fps,
+        seen_shingles=seen_shingles,
+        stats=stats,
+    )
+    assert kept1 is True
+    assert reason1 is None
+
+    # Text2 adds only two words to text1 (Jaccard > 0.80)
+    text2 = (
+        "White develops the bishop to c4 aiming at the sensitive f7 square and preparing castling right now."
+    )
+    kept2, reason2, _ = filter_comment(
+        text=text2,
+        fen=ITALIAN_FEN,
+        seen_fingerprints=seen_fps,
+        seen_shingles=seen_shingles,
+        stats=stats,
+    )
+    assert kept2 is False
+    assert reason2 == "duplicate"
+    assert stats.duplicate == 1
+
+
+def test_pre_filter_comment() -> None:
+    """Verify Stockfish-independent checks in pre_filter_comment."""
+    seen_fps: set[str] = set()
+    seen_shingles: list[set[tuple[str, ...]]] = []
+    stats = FilterStats()
+
+    # Short text fails
+    kept_short, reason_short, _ = pre_filter_comment(
+        text="Too short.",
+        fen=ITALIAN_FEN,
+        stats=stats,
+    )
+    assert kept_short is False
+    assert reason_short == "cleaned_empty_or_short"
+
+    # Valid text passes
+    valid_text = "White develops the bishop to c4 and targets the weak pawn on f7."
+    kept_valid, reason_valid, cleaned = pre_filter_comment(
+        text=valid_text,
+        fen=ITALIAN_FEN,
+        move_uci="c4f7",
+        seen_fingerprints=seen_fps,
+        seen_shingles=seen_shingles,
+        stats=stats,
+    )
+    assert kept_valid is True
+    assert reason_valid is None
+    assert len(cleaned.split()) >= 8
+
+    # Duplicate text fails
+    kept_dup, reason_dup, _ = pre_filter_comment(
+        text=valid_text,
+        fen=ITALIAN_FEN,
+        move_uci="c4f7",
+        seen_fingerprints=seen_fps,
+        seen_shingles=seen_shingles,
+        stats=stats,
+    )
+    assert kept_dup is False
+    assert reason_dup == "duplicate"
+
+
 def test_filter_valid_comment_passes() -> None:
     """Verify that a high quality chess comment passes all filters."""
     stats = FilterStats()
@@ -285,15 +365,36 @@ def test_assign_detail_and_truncate_short() -> None:
 
 
 def test_assign_detail_and_truncate_medium() -> None:
-    """Verify that 80 to 200 word comments produce both long and short variants."""
+    """Verify that 80 to 200 word good comments produce a single long detail record."""
     sentence = "White develops pieces actively toward the center to prepare an attack. "
     # 11 words per sentence * 10 sentences = 110 words
-    long_text = sentence * 10
-    records = assign_detail_and_truncate(long_text.strip())
-    assert len(records) == 2
-    details = [r["detail"] for r in records]
-    assert "long" in details
-    assert "short" in details
+    long_text = (sentence * 10).strip()
+    records = assign_detail_and_truncate(long_text)
+    assert len(records) == 1
+    assert records[0]["detail"] == "long"
+    assert records[0]["text"] == long_text
+
+
+def test_assign_detail_and_truncate_medium_unstructured() -> None:
+    """Verify that long unstructured comments cut down to short detail."""
+    # 1 long sentence of 90 words without punctuation
+    words = ["word"] * 90
+    unstructured_text = "White plays " + " ".join(words) + " carefully."
+    records = assign_detail_and_truncate(unstructured_text)
+    assert len(records) == 1
+    assert records[0]["detail"] == "short"
+    assert len(records[0]["text"].split()) <= 80
+
+
+def test_assign_detail_and_truncate_over_200() -> None:
+    """Verify that comments over 200 words cut down to short detail."""
+    sentence = "White develops pieces actively toward the center to prepare an attack. "
+    # 11 words * 25 sentences = 275 words
+    huge_text = (sentence * 25).strip()
+    records = assign_detail_and_truncate(huge_text)
+    assert len(records) == 1
+    assert records[0]["detail"] == "short"
+    assert len(records[0]["text"].split()) <= 80
 
 
 def test_truncate_to_sentences() -> None:

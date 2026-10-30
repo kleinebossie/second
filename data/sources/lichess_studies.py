@@ -46,7 +46,7 @@ ICANNOS_CSV_URL = (
 OPEN_LICENSE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bcc0\b", re.IGNORECASE), "CC0-1.0"),
     (re.compile(r"\bpublic\s+domain\b", re.IGNORECASE), "Public Domain"),
-    (re.compile(r"\bcc-by(?:-[a-z]+)?\b", re.IGNORECASE), "CC-BY"),
+    (re.compile(r"\bcc-by(?:-sa)?(?:\s+\d+\.\d+)?\b", re.IGNORECASE), "CC-BY"),
     (re.compile(r"\bcreative\s+commons\b", re.IGNORECASE), "CC-BY"),
     (re.compile(r"\bmit\s+license\b", re.IGNORECASE), "MIT"),
 ]
@@ -73,8 +73,9 @@ def detect_study_license(
     """Detect license type and redistribution rights for a study.
 
     Check headers, introductory comments, and source hints.
+    If restrictive license terms match, return standard Lichess terms and False.
     If an explicit open license matches, return the license and True.
-    When no open license matches, return the standard Lichess terms and False.
+    When no open license matches, return standard Lichess terms and False.
     """
     if "pgnlib_" in source_hint.lower():
         return "Public Domain", True
@@ -90,6 +91,9 @@ def detect_study_license(
         ]
     )
 
+    if re.search(r"\bcc-by-(?:nc|nd)\b|\bnon-?commercial\b", combined_text, re.IGNORECASE):
+        return "Lichess Terms of Service", False
+
     for pattern, name in OPEN_LICENSE_PATTERNS:
         if pattern.search(combined_text):
             return name, True
@@ -100,18 +104,14 @@ def detect_study_license(
 def extract_study_id(headers: chess.pgn.Headers, fallback: str = "") -> str:
     """Extract a study identifier from PGN headers.
 
-    If the Site header contains a Lichess study URL, extract the tokens.
+    If the Site header contains a Lichess study URL, return the study ID.
     When no URL matches, use the fallback key or create a hash.
     Return the identifier string.
     """
     site = headers.get("Site", "")
     match = re.search(r"lichess\.org/study/([A-Za-z0-9]+)(?:/([A-Za-z0-9]+))?", site)
     if match:
-        study_id = match.group(1)
-        chapter_id = match.group(2)
-        if chapter_id:
-            return f"{study_id}_{chapter_id}"
-        return study_id
+        return match.group(1)
 
     if fallback:
         return fallback
@@ -225,6 +225,29 @@ def fetch_lichess_study(
         return []
 
 
+def _iter_csv_rows(raw_bytes: bytes) -> Iterator[list[str]]:
+    """Yield data rows from CSV bytes.
+
+    If the magic bytes match gzip, decompress the payload.
+    Set the field size limit to support long PGN entries.
+    Skip the header row.
+    Yield each non-empty row.
+    """
+    import gzip
+
+    if raw_bytes[:2] == b"\x1f\x8b":
+        text_data = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
+    else:
+        text_data = raw_bytes.decode("utf-8", errors="replace")
+
+    csv.field_size_limit(10 * 1024 * 1024)
+    reader = csv.reader(io.StringIO(text_data))
+    _header = next(reader, None)
+    for row in reader:
+        if row:
+            yield row
+
+
 def stream_icannos_csv(
     csv_url: str = ICANNOS_CSV_URL,
     local_csv: Path | None = None,
@@ -238,78 +261,39 @@ def stream_icannos_csv(
     Extract PGN text and parse comments for each study.
     Yield each extracted record.
     """
+    if local_csv and local_csv.exists():
+        raw_bytes = local_csv.read_bytes()
+    else:
+        try:
+            with requests.get(csv_url, stream=True, timeout=30) as response:
+                if response.status_code != 200:
+                    return
+                raw_bytes = response.content
+        except requests.RequestException:
+            return
+
     studies_processed = 0
     items_yielded = 0
 
-    if local_csv and local_csv.exists():
-        import gzip
+    for row in _iter_csv_rows(raw_bytes):
+        pgn_content = row[0]
+        if pgn_content.strip() == "text":
+            continue
+        records = parse_study_pgn(
+            pgn_text=pgn_content,
+            require_open_license=require_open_license,
+        )
+        if not records:
+            continue
 
-        raw_bytes = local_csv.read_bytes()
-        if raw_bytes[:2] == b"\x1f\x8b":
-            text_data = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
-        else:
-            text_data = raw_bytes.decode("utf-8", errors="replace")
-        csv.field_size_limit(10 * 1024 * 1024)
-        reader = csv.reader(io.StringIO(text_data))
-        _header = next(reader, None)
-        for row in reader:
-            if not row:
-                continue
-            pgn_content = row[0]
-            records = parse_study_pgn(
-                pgn_text=pgn_content,
-                require_open_license=require_open_license,
-            )
-            if not records:
-                continue
-
-            studies_processed += 1
-            for record in records:
-                yield record
-                items_yielded += 1
-                if max_items is not None and items_yielded >= max_items:
-                    return
-            if max_studies is not None and studies_processed >= max_studies:
+        studies_processed += 1
+        for record in records:
+            yield record
+            items_yielded += 1
+            if max_items is not None and items_yielded >= max_items:
                 return
-        return
-
-    try:
-        import gzip
-
-        with requests.get(csv_url, stream=True, timeout=30) as response:
-            if response.status_code != 200:
-                return
-            raw_bytes = response.content
-            if raw_bytes[:2] == b"\x1f\x8b":
-                text_data = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
-            else:
-                text_data = raw_bytes.decode("utf-8", errors="replace")
-            csv.field_size_limit(10 * 1024 * 1024)
-            reader = csv.reader(io.StringIO(text_data))
-            _header = next(reader, None)
-            for row in reader:
-                if not row:
-                    continue
-                text = row[0]
-                if text.strip() == "text":
-                    continue
-                records = parse_study_pgn(
-                    pgn_text=text,
-                    require_open_license=require_open_license,
-                )
-                if not records:
-                    continue
-
-                studies_processed += 1
-                for record in records:
-                    yield record
-                    items_yielded += 1
-                    if max_items is not None and items_yielded >= max_items:
-                        return
-                if max_studies is not None and studies_processed >= max_studies:
-                    return
-    except requests.RequestException:
-        return
+        if max_studies is not None and studies_processed >= max_studies:
+            return
 
 
 def collect_lichess_studies(

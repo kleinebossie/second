@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+import chess
 from langdetect import DetectorFactory, detect
 
 from rewards.checks import (
@@ -281,6 +282,51 @@ def compute_fingerprint(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+def compute_shingles(text: str, n: int = 5) -> set[tuple[str, ...]]:
+    """Compute n-gram word shingles from cleaned text.
+
+    Extract lowercase alphanumeric words.
+    If text has fewer than n words, return a single tuple of all words.
+    Return set of n-gram word tuples.
+    """
+    words = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in text.split()]
+    words = [w for w in words if w]
+    if not words:
+        return set()
+    if len(words) < n:
+        return {tuple(words)}
+    return {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
+
+
+def is_near_duplicate(
+    cleaned: str,
+    seen_fingerprints: set[str],
+    seen_shingles: list[set[tuple[str, ...]]] | None = None,
+    threshold: float = 0.80,
+) -> bool:
+    """Check if text is an exact or near duplicate of seen comments.
+
+    Check exact match with normalized alphanumeric fingerprint.
+    If seen_shingles is provided, check Jaccard similarity on 5-gram shingles.
+    Return true if exact match or Jaccard similarity meets threshold.
+    """
+    fingerprint = compute_fingerprint(cleaned)
+    if fingerprint in seen_fingerprints:
+        return True
+
+    if seen_shingles is not None:
+        shingles = compute_shingles(cleaned, n=5)
+        if not shingles:
+            return False
+        for seen in seen_shingles:
+            intersection = len(shingles & seen)
+            union = len(shingles | seen)
+            if union > 0 and (intersection / union) >= threshold:
+                return True
+
+    return False
+
+
 def truncate_to_sentences(
     text: str,
     min_sentences: int = 2,
@@ -312,7 +358,11 @@ def truncate_to_sentences(
         if len(selected) >= max_sentences:
             break
 
-    return " ".join(selected)
+    result = " ".join(selected)
+    words = result.split()
+    if len(words) > max_words:
+        result = " ".join(words[:max_words])
+    return result
 
 
 def filter_comment(
@@ -322,6 +372,7 @@ def filter_comment(
     verdict: str = "Good",
     facts: list[str] | None = None,
     seen_fingerprints: set[str] | None = None,
+    seen_shingles: list[set[tuple[str, ...]]] | None = None,
     stats: FilterStats | None = None,
 ) -> tuple[bool, str | None, str]:
     """Filter a single chess comment according to Phase 2.3 rules.
@@ -402,13 +453,18 @@ def filter_comment(
         return False, "links_usernames_offensive", cleaned
 
     # 7. Check duplicates
-    fingerprint = compute_fingerprint(cleaned)
     if seen_fingerprints is not None:
-        if fingerprint in seen_fingerprints:
+        if is_near_duplicate(
+            cleaned=cleaned,
+            seen_fingerprints=seen_fingerprints,
+            seen_shingles=seen_shingles,
+        ):
             if stats:
                 stats.duplicate += 1
             return False, "duplicate", cleaned
-        seen_fingerprints.add(fingerprint)
+        seen_fingerprints.add(compute_fingerprint(cleaned))
+        if seen_shingles is not None:
+            seen_shingles.append(compute_shingles(cleaned, n=5))
 
     if stats:
         stats.kept += 1
@@ -416,30 +472,143 @@ def filter_comment(
     return True, None, cleaned
 
 
-def assign_detail_and_truncate(text: str) -> list[dict[str, str]]:
-    """Assign detail tiers and truncate long comments into short variants.
+def pre_filter_comment(
+    text: str,
+    fen: str,
+    move_uci: str | None = None,
+    seen_fingerprints: set[str] | None = None,
+    seen_shingles: list[set[tuple[str, ...]]] | None = None,
+    stats: FilterStats | None = None,
+) -> tuple[bool, str | None, str]:
+    """Pre-filter a raw comment before engine analysis.
 
-    When comment has between 8 and 80 words, assign short detail.
-    When comment has between 80 and 200 words, assign long detail and make a short cut.
-    When comment exceeds 200 words, cut down to short detail.
-    Return a list of records with text and detail keys.
+    Evaluate deterministic filters without engine evaluation.
+    Check comment length, English language, chess content, and board validity.
+    Check piece on square, offensive words, and duplicate text.
+    Return a tuple of kept status, rejection reason, and cleaned text.
+    """
+    if stats:
+        stats.total_input += 1
+
+    # 1. Clean comment and check length
+    cleaned = clean_comment(text)
+    words = cleaned.split()
+    if len(words) < 8:
+        if stats:
+            stats.cleaned_empty_or_short += 1
+        return False, "cleaned_empty_or_short", cleaned
+
+    # 2. Check English language
+    try:
+        detected_lang = detect(cleaned)
+        if detected_lang != "en":
+            if stats:
+                stats.not_english += 1
+            return False, "not_english", cleaned
+    except Exception:
+        if stats:
+            stats.not_english += 1
+        return False, "not_english", cleaned
+
+    # 3. Check chess content
+    if not has_chess_content(cleaned):
+        if stats:
+            stats.no_chess_content += 1
+        return False, "no_chess_content", cleaned
+
+    # 4. Check board validity, move legality, and piece on square
+    try:
+        board = chess.Board(fen)
+        if not board.is_valid():
+            if stats:
+                stats.illegal_move_or_wrong_piece += 1
+            return False, "illegal_move_or_wrong_piece", cleaned
+        if move_uci:
+            move = chess.Move.from_uci(move_uci)
+            if move not in board.legal_moves:
+                if stats:
+                    stats.illegal_move_or_wrong_piece += 1
+                return False, "illegal_move_or_wrong_piece", cleaned
+    except Exception:
+        if stats:
+            stats.illegal_move_or_wrong_piece += 1
+        return False, "illegal_move_or_wrong_piece", cleaned
+
+    piece_res = check_piece_on_square(
+        text=cleaned,
+        fen=fen,
+        move_uci=move_uci,
+    )
+    if not piece_res.passed:
+        if stats:
+            stats.illegal_move_or_wrong_piece += 1
+        return False, "illegal_move_or_wrong_piece", cleaned
+
+    # 5. Check links, usernames, and offensive language
+    if LINK_RE.search(cleaned) or HANDLE_RE.search(cleaned) or has_offensive_content(cleaned):
+        if stats:
+            stats.links_usernames_offensive += 1
+        return False, "links_usernames_offensive", cleaned
+
+    # 6. Check duplicates
+    if seen_fingerprints is not None:
+        if is_near_duplicate(
+            cleaned=cleaned,
+            seen_fingerprints=seen_fingerprints,
+            seen_shingles=seen_shingles,
+        ):
+            if stats:
+                stats.duplicate += 1
+            return False, "duplicate", cleaned
+        seen_fingerprints.add(compute_fingerprint(cleaned))
+        if seen_shingles is not None:
+            seen_shingles.append(compute_shingles(cleaned, n=5))
+
+    return True, None, cleaned
+
+
+def assign_detail_and_truncate(text: str) -> list[dict[str, str]]:
+    """Assign detail tiers and truncate long comments.
+
+    If word count is between 8 and 80 words, assign short detail.
+    If word count is between 81 and 200 words and prose is good, assign long detail.
+    If prose is not good or text exceeds 200 words, cut to short detail.
+    Return at most one record to avoid duplicate positions in training data.
     """
     words = text.split()
     word_count = len(words)
 
-    if 8 <= word_count <= 80:
+    if word_count < 8:
+        return []
+
+    if word_count <= 80:
         return [{"text": text, "detail": "short"}]
 
-    if 80 < word_count <= 200:
-        results = [{"text": text, "detail": "long"}]
-        short_version = truncate_to_sentences(text, min_sentences=2, max_sentences=4, max_words=80)
-        if len(short_version.split()) >= 8:
-            results.append({"text": short_version, "detail": "short"})
-        return results
+    if word_count <= 200:
+        sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+        sentence_count = len(sentences)
+        avg_sentence_len = word_count / sentence_count if sentence_count > 0 else 0.0
 
-    # When word count exceeds 200 words
-    short_version = truncate_to_sentences(text, min_sentences=2, max_sentences=4, max_words=80)
-    if len(short_version.split()) >= 8:
+        if sentence_count >= 3 and avg_sentence_len <= 25.0:
+            return [{"text": text, "detail": "long"}]
+
+        short_version = truncate_to_sentences(
+            text, min_sentences=2, max_sentences=4, max_words=80
+        )
+        words_short = short_version.split()
+        if len(words_short) > 80:
+            short_version = " ".join(words_short[:80])
+        elif len(words_short) < 8:
+            short_version = " ".join(words[:80])
         return [{"text": short_version, "detail": "short"}]
 
-    return []
+    # When word count exceeds 200 words
+    short_version = truncate_to_sentences(
+        text, min_sentences=2, max_sentences=4, max_words=80
+    )
+    words_short = short_version.split()
+    if len(words_short) > 80:
+        short_version = " ".join(words_short[:80])
+    elif len(words_short) < 8:
+        short_version = " ".join(words[:80])
+    return [{"text": short_version, "detail": "short"}]

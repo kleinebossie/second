@@ -46,6 +46,7 @@ from data.pipeline.run_pipeline import (
 )
 from data.pipeline.splits import (
     hash_game_id,
+    normalize_fen,
     save_splits,
     split_by_game,
 )
@@ -58,7 +59,7 @@ def stockfish_path() -> str:
 
 
 def test_find_stockfish_binary(stockfish_path: str) -> None:
-    """Verify that Stockfish executable binary is found and executable."""
+    """Verify that the system finds an executable Stockfish binary."""
     assert Path(stockfish_path).exists()
     assert os.access(stockfish_path, os.X_OK)
 
@@ -177,6 +178,16 @@ def test_analyse_records(stockfish_path: str, tmp_path: Path) -> None:
     assert pos_rec["eval_after"] is None
 
 
+def test_normalize_fen() -> None:
+    """Verify normalization of FEN string to its four-field board state."""
+    full_fen_1 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+    full_fen_2 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 5 12"
+    norm_1 = normalize_fen(full_fen_1)
+    norm_2 = normalize_fen(full_fen_2)
+    assert norm_1 == "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -"
+    assert norm_1 == norm_2
+
+
 def test_split_by_game_and_collision_resolution(tmp_path: Path) -> None:
     """Verify game-level partitioning and cross-split position collision resolution."""
     # Create 100 mock games
@@ -223,6 +234,18 @@ def test_split_by_game_and_collision_resolution(tmp_path: Path) -> None:
         if common_opening in fset
     ]
     assert len(splits_with_common) == 1
+
+    # Verify that positions with different move clocks but identical board states collide
+    fen_clock_0 = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+    fen_clock_5 = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 5 10"
+    records_clock = [
+        {"game_id": "game_clock_a", "fen": fen_clock_0, "redistributable": True},
+        {"game_id": "game_clock_b", "fen": fen_clock_5, "redistributable": True},
+    ]
+    splits_clock = split_by_game(records_clock, val_ratio=0.50, test_ratio=0.0, seed=42)
+    norm_train = {normalize_fen(r["fen"]) for r in splits_clock["train"]}
+    norm_val = {normalize_fen(r["fen"]) for r in splits_clock["val"]}
+    assert not (norm_train & norm_val)
 
     # Test saving splits to disk
     out_dir = tmp_path / "processed"
@@ -429,3 +452,5 @@ def test_run_pipeline_end_to_end(stockfish_path: str, tmp_path: Path) -> None:
     assert (out_dir / "sft_train.parquet").exists()
     assert (pub_dir / "sft_train.parquet").exists()
     assert (drive_dir / "sft_train.parquet").exists()
+    assert Path(report["export_directory"]).resolve() == (out_dir / "hf_export").resolve()
+    assert (out_dir / "hf_export").exists()
