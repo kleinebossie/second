@@ -2,7 +2,7 @@
 // ASD-STE100 guidelines: short sentences, active voice, simple terms.
 
 import { Wllama } from "@wllama/wllama/esm/index.js";
-import { createStreamTracker } from "./metrics.js";
+import { createStreamTracker, createInitialResult } from "./metrics.js";
 
 // In Chrome extensions, load local WASM to follow Manifest V3 rules.
 // In standard web pages, use the CDN binary.
@@ -25,20 +25,8 @@ export async function runWllamaBenchmark({
   onToken,
   abortSignal
 }) {
-  const result = {
-    runtime: "wllama (GGUF)",
-    modelId: typeof modelUrlOrHf === "string" ? modelUrlOrHf : `${modelUrlOrHf.repo}/${modelUrlOrHf.file}`,
-    loadTimeMs: 0,
-    downloadBytes: 0,
-    downloadSizeMB: 0,
-    ttftMs: 0,
-    generationTimeMs: 0,
-    totalTimeMs: 0,
-    tokenCount: 0,
-    tokensPerSecond: 0,
-    outputText: "",
-    error: null
-  };
+  const modelId = typeof modelUrlOrHf === "string" ? modelUrlOrHf : `${modelUrlOrHf.repo}/${modelUrlOrHf.file}`;
+  const result = createInitialResult("wllama (GGUF)", modelId);
 
   let wllama = null;
 

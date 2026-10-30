@@ -21,7 +21,7 @@ The benchmark measures:
 
 1. Open Google Colab in your browser: `https://colab.research.google.com`.
 2. Click **File** > **Upload notebook**.
-3. Select `phase0_4_stockfish_test.ipynb` from this folder.
+3. Select `phase0_4_stockfish_test.ipynb` from this directory.
 4. Click **Runtime** > **Change runtime type**.
 5. Select **CPU** or **T4 GPU**. A CPU runtime uses fewer compute units.
 6. Click **Runtime** > **Run all**.

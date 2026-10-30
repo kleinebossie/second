@@ -20,7 +20,7 @@ export default defineConfig({
   },
   plugins: [
     {
-      name: "copy-extension-manifest",
+      name: "copy-extension-assets",
       closeBundle() {
         const outDir = resolve(__dirname, "dist-ext");
         fs.copyFileSync(resolve(__dirname, "manifest.json"), resolve(outDir, "manifest.json"));

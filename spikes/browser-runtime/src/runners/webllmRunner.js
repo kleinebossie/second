@@ -2,7 +2,7 @@
 // ASD-STE100 guidelines: short sentences, active voice, simple terms.
 
 import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
-import { createStreamTracker } from "./metrics.js";
+import { createStreamTracker, createInitialResult } from "./metrics.js";
 
 export async function runWebLLMBenchmark({
   modelId,
@@ -11,20 +11,7 @@ export async function runWebLLMBenchmark({
   onToken,
   abortSignal
 }) {
-  const result = {
-    runtime: "WebLLM (MLC)",
-    modelId,
-    loadTimeMs: 0,
-    downloadBytes: 0,
-    downloadSizeMB: 0,
-    ttftMs: 0,
-    generationTimeMs: 0,
-    totalTimeMs: 0,
-    tokenCount: 0,
-    tokensPerSecond: 0,
-    outputText: "",
-    error: null
-  };
+  const result = createInitialResult("WebLLM (MLC)", modelId);
 
   try {
     if (abortSignal?.aborted) {

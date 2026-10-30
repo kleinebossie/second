@@ -8,7 +8,7 @@ Before you start full training, verify the training stack on Google Colab with t
 The notebook tests:
 - GPU hardware and memory (NVIDIA L4, 24 GB VRAM).
 - Google Drive mount for saving checkpoints.
-- Installation of Unsloth, TRL, Transformers, and fast attention kernels.
+- Installation of TRL, Transformers, PEFT, and optional Unsloth kernels.
 - Loading `Qwen/Qwen3.5-2B` in non-thinking mode with LoRA.
 - 10 steps of Supervised Fine-Tuning (SFT).
 - 10 steps of Group Relative Policy Optimization (GRPO).
@@ -26,7 +26,7 @@ The notebook tests:
 
 1. Open Google Colab in your browser: `https://colab.research.google.com`.
 2. Click **File** > **Upload notebook**.
-3. Select `phase0_3_training_test.ipynb` from this folder.
+3. Select `phase0_3_training_test.ipynb` from this directory.
 4. Click **Runtime** > **Change runtime type**.
 5. Select **L4 GPU** under Hardware accelerator.
 6. Click **Save**.

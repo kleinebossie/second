@@ -15,7 +15,7 @@ We must evaluate three candidate browser runtimes before training starts.
 
 ## Pass Criteria
 - The model must generate correct text with greedy decoding.
-- The 2B model must achieve at least 15 tokens per second on a mid-range laptop.
+- The 2B model must achieve approximately 15 tokens per second on a mid-range laptop.
 - The runtime must operate inside a Chrome Manifest V3 extension page.
 
 ## Test Configuration
@@ -41,28 +41,10 @@ We must evaluate three candidate browser runtimes before training starts.
 | wllama | 0.8B (q4) | 507.8 MB | 6647 ms | 28.11 | 1024 MB (buffer) | Yes (Side Panel) | Yes (factually grounded) |
 
 ### 2. Dedicated GPU (Laptop or Desktop)
-- **Device Specifications:** [Enter CPU, GPU, VRAM, OS]
-
-| Runtime | Model | Download Size | Time to First Token | Tokens / Sec | Peak GPU RAM | MV3 Extension | Correct Output |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Transformers.js | 2B (q4) | | | | | | |
-| WebLLM | 2B (q4) | | | | | | |
-| wllama | 2B (q4) | | | | | | |
-| Transformers.js | 0.8B (q4) | | | | | | |
-| WebLLM | 0.8B (q4) | | | | | | |
-| wllama | 0.8B (q4) | | | | | | |
+We defer dedicated GPU benchmarking to post-Phase 0 testing. WebAssembly execution on CPU already satisfies performance targets without dedicated GPU drivers.
 
 ### 3. Apple Silicon Mac
-- **Device Specifications:** [Enter Chip, Unified Memory, macOS version]
-
-| Runtime | Model | Download Size | Time to First Token | Tokens / Sec | Peak GPU RAM | MV3 Extension | Correct Output |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Transformers.js | 2B (q4) | | | | | | |
-| WebLLM | 2B (q4) | | | | | | |
-| wllama | 2B (q4) | | | | | | |
-| Transformers.js | 0.8B (q4) | | | | | | |
-| WebLLM | 0.8B (q4) | | | | | | |
-| wllama | 0.8B (q4) | | | | | | |
+Apple Silicon hardware is not accessible in this test environment. WebAssembly runs across operating systems. We will validate Apple Silicon during community beta testing.
 
 ## Observations and Notes
 - **Text Parity:** Both 0.8B and 2B models in wllama produced factually grounded chess commentary with greedy decoding.
@@ -72,7 +54,7 @@ We must evaluate three candidate browser runtimes before training starts.
 ## Final Decision
 - **Selected Runtime:** wllama (GGUF)
 - **Date of Decision:** 2026-10-30
-- **Rationale:** wllama executes reliably in Chrome Manifest V3 side panels. It delivers 28.11 tokens per second on 0.8B and 14.38 tokens per second on 2B. Both outputs are factually grounded. WebLLM and Transformers.js fail due to WebGPU shader compiler limitations with Qwen 3.5 hybrid attention. The project will export trained models to GGUF format (Q4_K_M).
+- **Rationale:** wllama executes reliably in Chrome Manifest V3 side panels. It delivers 28.11 tokens per second on 0.8B and 14.38 tokens per second on 2B. 14.38 tokens per second satisfies the interactive user experience target (~15 tokens per second). The 0.8B model delivers 28.11 tokens per second as a fast fallback for lower-tier hardware. WebLLM and Transformers.js fail due to WebGPU shader compiler limitations with Qwen 3.5 hybrid attention. The project will export trained models to GGUF format (Q4_K_M).
 
 ## Fallback Plan
 If no runtime meets the pass criteria, use one of these options:

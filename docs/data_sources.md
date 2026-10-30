@@ -42,9 +42,9 @@ We divide distribution into two categories:
   Commercial use does not require permission.
   Attribution is appreciated but not legally required under CC0.
 - **Decision for Second:**
-  We will extract game positions, move metadata, and Stockfish evaluations from this archive.
-  We will publish all processed training pairs in `second-chess/second-data-1.0`.
-  The dataset will use the Apache 2.0 license.
+  We extract game positions, move metadata, and Stockfish evaluations from this archive.
+  We publish all processed training pairs in `second-chess/second-data-1.0`.
+  The dataset uses the Apache 2.0 license.
 
 ### 2.2 Lichess Puzzles Database
 
@@ -55,9 +55,9 @@ We divide distribution into two categories:
   Anyone can download, change, and redistribute the puzzle database freely.
   Commercial projects can use these puzzle records without fees or restrictions.
 - **Decision for Second:**
-  We will convert puzzle positions, themes, and solution lines into factual prompts.
-  We will publish the processed puzzle dataset in `second-chess/second-data-1.0`.
-  The dataset will use the Apache 2.0 license.
+  We convert puzzle positions, themes, and solution lines into factual prompts.
+  We publish the processed puzzle dataset in `second-chess/second-data-1.0`.
+  The dataset uses the Apache 2.0 license.
 
 ### 2.3 Lichess Studies
 
@@ -73,10 +73,10 @@ We divide distribution into two categories:
   Standard chess move notation consists of objective facts and does not receive copyright protection.
   However, human prose commentary represents original creative expression and receives copyright protection.
 - **Decision for Second:**
-  We will not publish scraped study commentary in `second-chess/second-data-1.0`.
-  If an individual study creator explicitly states an open license (such as CC0 or CC-BY), we can include that study.
-  For all other studies, we will publish only a rebuild script (`data/sources/lichess_studies.py`).
-  The rebuild script will fetch and process studies directly on the computer of the user.
+  We do not publish scraped study commentary in `second-chess/second-data-1.0`.
+  If an individual study creator explicitly states an open license (such as CC0 or CC-BY), we include that study.
+  For all other studies, we publish only a rebuild script (`data/sources/lichess_studies.py`).
+  The rebuild script fetches and processes studies directly on the computer of the user.
 
 ### 2.4 GameKnot Annotated Games
 
@@ -90,9 +90,9 @@ We divide distribution into two categories:
   Section 10 of the GameKnot Community Standards forbids automated bots and scrapers.
   Therefore, third parties have no legal right to redistribute GameKnot commentary corpora.
 - **Decision for Second:**
-  We will not publish raw GameKnot annotations or processed commentary in `second-chess/second-data-1.0`.
-  We will publish only a rebuild script (`data/sources/gameknot.py`).
-  If a user wants to train on GameKnot data, the user must run the rebuild script locally.
+  We do not publish raw GameKnot annotations or processed commentary in `second-chess/second-data-1.0`.
+  We publish only a rebuild script (`data/sources/gameknot.py`).
+  If a user wants to train on GameKnot data, the user runs the rebuild script locally.
   This approach protects the Second project repository against copyright infringement claims.
 
 ### 2.5 MATE Dataset ("Move on strAtegy and Tactics datasEt")
@@ -106,16 +106,16 @@ We divide distribution into two categories:
   The MIT License permits anyone to copy, modify, publish, distribute, and sell copies.
   If you redistribute the dataset or substantial portions, you must include the original copyright notice and license notice.
 - **Decision for Second:**
-  We will process MATE entries into our fact-based instruction prompt format.
-  We will publish the processed data in `second-chess/second-data-1.0`.
-  We will include the original MIT copyright notice in the dataset card and documentation.
+  We process MATE entries into our fact-based instruction prompt format.
+  We publish the processed data in `second-chess/second-data-1.0`.
+  We include the original MIT copyright notice in the dataset card and documentation.
 - **Note on Related Academic Datasets:**
   A related dataset comes from Jhamtani et al. (ACL 2018), "Learning to Generate Move-by-Move Commentary for Chess Games from Large-Scale Social Forum Data".
   The repository `harsh19/ChessCommentaryGeneration` contains move-commentary pairs collected from GameKnot.
   The repository does not contain an explicit open-source license file.
-  If the Second project uses data from the Jhamtani corpus, we will treat that data like GameKnot data.
-  We will not publish that text in `second-chess/second-data-1.0`.
-  We will only provide a rebuild script to process it locally.
+  If the Second project uses data from the Jhamtani corpus, we treat that data like GameKnot data.
+  We do not publish that text in `second-chess/second-data-1.0`.
+  We only provide a rebuild script to process it locally.
 
 ---
 

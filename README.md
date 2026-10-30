@@ -55,7 +55,7 @@ second/
 │   ├── sources/             # Data download scripts (planned for Phase 2)
 │   ├── pipeline/            # Filtering and labeling scripts (planned for Phase 2)
 │   └── cards/               # Dataset documentation cards (planned for Phase 2)
-├── rewards/                 # Rule checkers for RL and eval (planned for Phase 3)
+├── rewards/                 # Rule checkers for Reinforcement Learning (RL) and evaluation (planned for Phase 3)
 ├── training/                # Training pipelines
 │   ├── configs/             # Training configurations per model size (planned for Phase 5)
 │   ├── sft.ipynb            # Supervised Fine-Tuning notebook (planned for Phase 5)

@@ -40,7 +40,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 - **Sequence Length:** 512
 - **Average Step Time:** 1.12 s
 - **Peak VRAM Used:** 5.85 GB (within 24 GB L4 limit)
-- **Errors Encountered:** None after routing loss through standard `Trainer.compute_loss`
+- **Errors Encountered:** TRL 0.15 missing Triton dependency. We resolved this by routing loss through standard `Trainer.compute_loss`.
 
 ### 2. GRPO Smoke Test (10 Steps)
 - **Framework Used:** TRL (`GRPOTrainer`)
@@ -55,7 +55,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 - **Save Operation:** Pass
 - **Save Time:** ~15 seconds
 - **Resume Operation:** Pass
-- **Resume Verification:** Verified (2 additional steps completed from saved checkpoint)
+- **Resume Verification:** We resumed training from the saved checkpoint and completed 2 steps.
 
 ## Compute Cost Measurements
 
@@ -63,7 +63,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | SFT (2B) | 2.5 | 1.12 s | 1,000 | 0.8 units | 0.31 hours (19 min) |
 | GRPO (2B) | 2.5 | 11.85 s | 500 | 4.1 units | 1.65 hours (99 min) |
-| **Total 2B Training** | **2.5** | | | **4.9 units** | **1.96 hours** |
+| **Total 2B Training** | **2.5** | Combined | 1,500 | **4.9 units** | **1.96 hours** |
 
 ## Stockfish Engine Benchmark (Phase 0.4)
 - **Hardware:** Intel Core Ultra 7 255H CPU (16 cores, 22 threads), Ubuntu 24.04 LTS
@@ -76,14 +76,15 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 | MultiPV=3 | 18 | 2 | 10 | 10.53 s | 1.052 s | 2.92 hours | 14.62 hours |
 
 ### Stockfish Compute Decision
-We select the local machine for Stockfish position generation.
+We provide the verified Colab test notebook (`spikes/colab-stockfish/phase0_4_stockfish_test.ipynb`).
+However, we select the local CPU machine for dataset generation.
 Generating 10,000 positions with MultiPV=3 takes approximately 1.76 hours on 4 threads.
 Generating 50,000 positions takes approximately 8.81 hours.
-Local execution costs $0.00 and eliminates cloud session limits.
+Local execution costs $0.00 and eliminates cloud session timeouts.
 
 ## Final Decision
 - **Primary Training Framework:** TRL + PEFT LoRA (bfloat16)
 - **vLLM Status for GRPO:** Disabled (uses standard TRL generation fallback)
 - **Required Fast Kernels:** None mandatory (native PyTorch fallbacks run efficiently on L4)
 - **Date of Decision:** 2026-10-30
-- **Rationale:** The entire training stack executes reliably on an NVIDIA L4 GPU. SFT uses 5.85 GB VRAM and GRPO uses 4.38 GB VRAM, well within 24 GB. The full 2B training plan consumes 4.9 Colab units (~$1.00), far below the $50 budget limit. Checkpoint saving and resumption with Google Drive are verified.
+- **Rationale:** The entire training stack executes reliably on an NVIDIA L4 GPU. SFT uses 5.85 GB VRAM and GRPO uses 4.38 GB VRAM, well within 24 GB. The full 2B training plan consumes 4.9 Colab units (~$1.00), far below the $50 budget limit. We saved checkpoints to Google Drive and resumed training successfully.
