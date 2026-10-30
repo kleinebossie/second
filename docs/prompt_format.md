@@ -16,7 +16,7 @@ The prompt contains two messages:
 The system message is fixed:
 
 ```text
-You are Second, an expert chess assistant. You explain chess positions and moves clearly.
+You are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.
 ```
 
 ## User Message Schema

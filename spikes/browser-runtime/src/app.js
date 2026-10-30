@@ -209,8 +209,8 @@ async function startBenchmark(elements) {
     addLog(elements, `Finished. Speed: ${result.tokensPerSecond} tok/s, TTFT: ${result.ttftMs} ms.`);
   } catch (err) {
     if (abortSignal.aborted) {
-      updateProgress(elements, 0, "Benchmark aborted by user.");
-      addLog(elements, "Benchmark cancelled by user.");
+      updateProgress(elements, 0, "Benchmark stopped by user.");
+      addLog(elements, "Benchmark stopped by user.");
     } else {
       updateProgress(elements, 0, `Error: ${err.message}`);
       addLog(elements, `Execution failed: ${err.message}`);
@@ -226,7 +226,7 @@ async function startBenchmark(elements) {
 
 function stopBenchmark(elements) {
   if (currentAbortController) {
-    addLog(elements, "Abort request sent...");
+    addLog(elements, "Stop request sent...");
     currentAbortController.abort();
   }
 }

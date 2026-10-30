@@ -603,22 +603,22 @@ second/
 
 ## 16. Compute budget (estimates)
 
-> [!WARNING]
-> These numbers are rough guesses. Phase 0.3 gives the real numbers. Update this table after Phase 0.
+> [!NOTE]
+> Updated after Phase 0.3 with empirical benchmarks on NVIDIA L4 GPU.
 
 Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 
-| Job | GPU | Hours | Units |
-|---|---|---|---|
-| Phase 0 tests | L4 | ~3 | ~8 |
-| Stockfish analysis | CPU runtime | many | low |
-| SFT 2B | L4 | ~1–2 | ~5 |
-| GRPO 2B | L4 | ~8–20 | ~20–50 |
-| Eval runs (several) | L4 | ~3 | ~8 |
-| **Second-1.0-2B total** | | | **~40–70** |
-| 0.8B (SFT + GRPO) | L4 | ~5–10 | ~15–25 |
-| 4B (SFT + GRPO) | L4 or A100 | ~15–30 | ~40–100 |
-| 9B (SFT + GRPO) | A100 | ~20–35 | ~150–300 (spread over 1–2 months) |
+| Job | GPU / Hardware | Hours | Units | Status |
+|---|---|---|---|---|
+| Phase 0 tests | L4 (Colab) | ~0.5 | ~1.2 | Verified |
+| Stockfish analysis | Local CPU (4 threads) | ~1.76 | 0 | Verified |
+| SFT 2B (1,000 steps) | L4 (Colab) | 0.31 | 0.8 | Verified |
+| GRPO 2B (500 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
+| Eval runs (several) | L4 (Colab) | ~1.5 | ~3.8 | Projected |
+| **Second-1.0-2B total** | | **~3.5** | **~10** | **Within 200 unit monthly budget** |
+| 0.8B (SFT + GRPO) | L4 (Colab) | ~1.0 | ~2.5 | Projected |
+| 4B (SFT + GRPO) | L4 or A100 | ~6–10 | ~20–35 | Projected |
+| 9B (SFT + GRPO) | A100 | ~15–20 | ~90–150 | Projected |
 
 **Colab rules for every run:**
 - Save checkpoints to Drive often.

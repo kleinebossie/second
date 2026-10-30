@@ -30,14 +30,14 @@
           <select id="runtime-select">
             <option value="webllm">WebLLM (MLC / WebGPU)</option>
             <option value="transformers">Transformers.js (ONNX / WebGPU)</option>
-            <option value="wllama">wllama (GGUF / WASM)</option>
+            <option value="wllama">wllama (GGUF / WebAssembly)</option>
           </select>
         </div>
         <div class="form-group">
           <label for="size-select">Model Size</label>
           <select id="size-select">
             <option value="0.8B">0.8B (Fast / Low Memory)</option>
-            <option value="2B" selected>2B (Target Second Base)</option>
+            <option value="2B" selected>2B (Target Base Model)</option>
           </select>
         </div>
         <div class="form-group">

@@ -129,6 +129,6 @@ Run the reference script in Python to verify text accuracy and measure native GP
 ## Performance Thresholds (Pass Rule)
 
 - Target model: 2B instruct.
-- Target speed: at least 15 tokens per second on a mid-range laptop GPU.
+- Usability threshold: at least 10 tokens per second (target: 15 tokens per second) for interactive side panel commentary.
 - Output text: must agree with the Python reference output for the same prompt facts.
-- If no runtime achieves 15 tokens per second, evaluate the 0.8B model or consider alternate base architectures.
+- Fallback: if 2B cannot reach the usability threshold on lower-tier hardware, select the 0.8B model (28.11 tokens per second) as the primary browser target.

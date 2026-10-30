@@ -20,7 +20,7 @@ Every model size uses the same prompt format and training recipe.
 
 The project includes a Manifest V3 browser extension for Lichess.
 The extension runs inside the Chrome side panel.
-It uses WebGPU to run the model directly on your local device.
+It executes the model directly on your local device using WebAssembly.
 Your game data stays private.
 The extension sends no positions to external model servers.
 

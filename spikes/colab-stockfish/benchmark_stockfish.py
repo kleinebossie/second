@@ -8,6 +8,7 @@ Measures total time, time per position, and projected time for 10k and 50k posit
 import argparse
 import os
 import stat
+import statistics
 import subprocess
 import sys
 import time
@@ -119,7 +120,7 @@ def run_benchmark_pass(
     engine.quit()
 
     avg_time = sum(times) / len(times)
-    median_time = sorted(times)[len(times) // 2]
+    median_time = statistics.median(times)
     nps = total_nodes / total_time if total_time > 0 else 0
 
     # Project time for large datasets (Phase 2.2 needs)

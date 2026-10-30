@@ -7,7 +7,7 @@ export function createInitialResult(runtime, modelId) {
     modelId,
     loadTimeMs: 0,
     downloadBytes: 0,
-    downloadSizeMB: "0.0",
+    downloadSizeMB: 0,
     ttftMs: 0,
     generationTimeMs: 0,
     totalTimeMs: 0,

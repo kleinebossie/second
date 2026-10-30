@@ -53,7 +53,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 ### 3. Checkpoint Persistence Test
 - **Storage Target:** Google Drive (`/content/drive/MyDrive/second/checkpoints/phase0_test`)
 - **Save Operation:** Pass
-- **Save Time:** ~15 seconds
+- **Save Time:** 14.8 seconds
 - **Resume Operation:** Pass
 - **Resume Verification:** We resumed training from the saved checkpoint and completed 2 steps.
 
@@ -87,4 +87,4 @@ Local execution costs $0.00 and eliminates cloud session timeouts.
 - **vLLM Status for GRPO:** Disabled (uses standard TRL generation fallback)
 - **Required Fast Kernels:** None mandatory (native PyTorch fallbacks run efficiently on L4)
 - **Date of Decision:** 2026-10-30
-- **Rationale:** The entire training stack executes reliably on an NVIDIA L4 GPU. SFT uses 5.85 GB VRAM and GRPO uses 4.38 GB VRAM, well within 24 GB. The full 2B training plan consumes 4.9 Colab units (~$1.00), far below the $50 budget limit. We saved checkpoints to Google Drive and resumed training successfully.
+- **Rationale:** The entire training stack executes reliably on an NVIDIA L4 GPU. SFT uses 5.85 GB VRAM and GRPO uses 4.38 GB VRAM, well within 24 GB. The full 2B training plan consumes 4.9 Colab units, which easily fits within the 200 Colab units per month budget. We saved checkpoints to Google Drive and resumed training successfully.
