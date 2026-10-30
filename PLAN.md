@@ -611,7 +611,7 @@ Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 | Job | GPU / Hardware | Hours | Units | Status |
 |---|---|---|---|---|
 | Phase 0 tests | L4 (Colab) | 0.5 | 1.2 | Verified |
-| Stockfish analysis | Local CPU (4 threads) | 1.76 | 0 | Verified |
+| Stockfish analysis | Local CPU (4 threads) | 1.48 | 0 | Verified |
 | SFT 2B (1,000 steps) | L4 (Colab) | 0.31 | 0.8 | Verified |
 | GRPO 2B (500 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
 | Eval runs (several) | L4 (Colab) | 1.50 | 3.8 | Projected |

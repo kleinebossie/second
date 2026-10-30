@@ -48,7 +48,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 - **vLLM Integration:** Unsupported (Fallback to standard TRL generation active)
 - **Average Step Time:** 11.85 s
 - **Peak VRAM Used:** 4.38 GB (within 24 GB L4 limit)
-- **Notes:** Standard generation achieves 11.85 s per step without vLLM
+- **Notes:** Standard generation achieves 11.85 s per step without vLLM.
 
 ### 3. Checkpoint Persistence Test
 - **Storage Target:** Google Drive (`/content/drive/MyDrive/second/checkpoints/phase0_test`)
@@ -71,15 +71,15 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 
 | Evaluation Mode | Depth | Threads | Positions Tested | Total Time | Avg Time / Position | Projected 10k Positions | Projected 50k Positions |
 |---|---|---|---|---|---|---|---|
-| Single-PV | 18 | 4 | 100 | 21.48 s | 0.215 s | 0.60 hours | 2.98 hours |
-| MultiPV=3 | 18 | 4 | 100 | 63.46 s | 0.635 s | 1.76 hours | 8.81 hours |
+| Single-PV | 18 | 4 | 100 | 18.82 s | 0.188 s | 0.52 hours | 2.61 hours |
+| MultiPV=3 | 18 | 4 | 100 | 53.12 s | 0.531 s | 1.48 hours | 7.38 hours |
 | MultiPV=3 | 18 | 2 | 10 | 10.53 s | 1.052 s | 2.92 hours | 14.62 hours |
 
 ### Stockfish Compute Decision
 We provide the verified Colab test notebook (`spikes/colab-stockfish/phase0_4_stockfish_test.ipynb`).
 However, we select the local CPU machine for dataset generation.
-Generating 10,000 positions with MultiPV=3 takes approximately 1.76 hours on 4 threads.
-Generating 50,000 positions takes approximately 8.81 hours.
+Generating 10,000 positions with MultiPV=3 takes approximately 1.48 hours on 4 threads.
+Generating 50,000 positions takes approximately 7.38 hours.
 Local execution costs $0.00 and eliminates cloud session timeouts.
 
 ## Final Decision

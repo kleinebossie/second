@@ -20,6 +20,16 @@ try:
 except ImportError:
     from spikes.colab_stockfish.positions import BENCHMARK_POSITIONS
 
+def _find_binary_in_dir(directory: Path) -> str:
+    """Find and return the first executable stockfish binary in directory."""
+    ignored_exts = (".tar.gz", ".txt", ".md")
+    for b in directory.glob("**/stockfish*"):
+        if b.is_file() and not b.name.endswith(ignored_exts):
+            b.chmod(b.stat().st_mode | stat.S_IEXEC)
+            return str(b)
+    return ""
+
+
 def find_or_download_stockfish(custom_path: str = None) -> str:
     """Find local Stockfish binary or download latest official universal release."""
     if custom_path and os.path.exists(custom_path):
@@ -33,13 +43,11 @@ def find_or_download_stockfish(custom_path: str = None) -> str:
     # Check local spikes/colab-stockfish/stockfish_bin/ directory for existing binary
     bin_dir = Path(__file__).resolve().parent / "stockfish_bin"
     if bin_dir.exists():
-        for b in bin_dir.glob("**/stockfish*"):
-            if b.is_file() and not b.name.endswith((".tar.gz", ".txt", ".md")):
-                b.chmod(b.stat().st_mode | stat.S_IEXEC)
-                return str(b)
+        found = _find_binary_in_dir(bin_dir)
+        if found:
+            return found
 
     print("Stockfish not found on PATH. Attempting automatic download from GitHub releases...")
-    bin_dir = Path(__file__).resolve().parent / "stockfish_bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     
     url = "https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-linux-x86-64-universal.tar.gz"
@@ -49,12 +57,9 @@ def find_or_download_stockfish(custom_path: str = None) -> str:
         subprocess.run(["curl", "-L", "-s", url, "-o", str(tar_path)], check=True)
         subprocess.run(["tar", "-xzf", str(tar_path), "-C", str(bin_dir)], check=True)
         
-        # Locate extracted binary
-        extracted_bins = list(bin_dir.glob("**/stockfish*"))
-        for b in extracted_bins:
-            if b.is_file() and not b.name.endswith(".tar.gz") and not b.name.endswith(".txt"):
-                b.chmod(b.stat().st_mode | stat.S_IEXEC)
-                return str(b)
+        found = _find_binary_in_dir(bin_dir)
+        if found:
+            return found
     except Exception as exc:
         print(f"Direct download failed: {exc}")
 
@@ -84,8 +89,11 @@ def run_benchmark_pass(
         import chess
         import chess.engine
     except ImportError:
-        print("python-chess not installed. Installing python-chess...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "python-chess"], check=True)
+        print("python-chess not installed. Attempting installation...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "python-chess"], check=True)
+        except Exception:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--break-system-packages", "python-chess"], check=True)
         import chess
         import chess.engine
 
