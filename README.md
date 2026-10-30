@@ -46,11 +46,11 @@ second/
 ├── docs/                    # Architecture records and specifications
 │   ├── decisions/           # Runtime and compute benchmark records
 │   ├── data_sources.md      # Data licensing and pipeline plans
-│   └── prompt_format.md     # Input prompt contract (planned for Phase 1)
+│   └── prompt_format.md     # Input prompt contract (Phase 1)
 ├── core/                    # Shared fact extractor and prompt builder
-│   ├── python/              # Python implementation (planned for Phase 1)
-│   ├── ts/                  # TypeScript implementation (planned for Phase 1)
-│   └── golden/              # Parity test suites (planned for Phase 1)
+│   ├── python/              # Python implementation (Phase 1)
+│   ├── ts/                  # TypeScript implementation (Phase 1)
+│   └── golden/              # 200 parity test positions and generator (Phase 1)
 ├── data/                    # Data pipeline
 │   ├── sources/             # Data download scripts (planned for Phase 2)
 │   ├── pipeline/            # Filtering and labeling scripts (planned for Phase 2)
@@ -74,7 +74,7 @@ second/
 │   ├── browser-runtime/     # Browser runtime test harness (Phase 0.2)
 │   ├── colab-training/      # Colab training stack test (Phase 0.3)
 │   └── colab-stockfish/     # Stockfish benchmark (Phase 0.4)
-└── .github/workflows/       # CI test pipelines (planned for Phase 1)
+└── .github/workflows/       # CI test pipelines (Phase 1)
 ```
 
 ## Licenses

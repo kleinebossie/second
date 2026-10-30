@@ -1,0 +1,53 @@
+name: CI
+
+# This workflow tests the core Python and TypeScript code.
+# It verifies parity with the golden test file.
+
+'on':
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  python-core:
+    name: Python Core
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install python-chess pytest
+
+      - name: Run Python tests
+        run: pytest core/python
+
+  ts-core:
+    name: TypeScript Core
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: core/ts
+        run: npm ci
+
+      - name: Run type check
+        working-directory: core/ts
+        run: npm run typecheck
+
+      - name: Run TypeScript tests
+        working-directory: core/ts
+        run: npm test
