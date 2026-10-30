@@ -51,11 +51,11 @@ second/
 │   ├── python/              # Python implementation (Phase 1)
 │   ├── ts/                  # TypeScript implementation (Phase 1)
 │   └── golden/              # 200 parity test positions and generator (Phase 1)
-├── data/                    # Data pipeline
-│   ├── sources/             # Data download scripts (planned for Phase 2)
-│   ├── pipeline/            # Filtering and labeling scripts (planned for Phase 2)
-│   └── cards/               # Dataset documentation cards (planned for Phase 2)
-├── rewards/                 # Rule checkers for Reinforcement Learning (RL) and evaluation (planned for Phase 3)
+├── data/                    # Data pipeline (Phase 2)
+│   ├── sources/             # Data download and extraction scripts (Phase 2.1)
+│   ├── pipeline/            # Stockfish analysis, filtering, labeling, and splitting (Phase 2.2-2.7)
+│   └── cards/               # Dataset documentation cards (Phase 2.7)
+├── rewards/                 # Rule checkers for Reinforcement Learning (RL) and evaluation (Phase 3)
 ├── training/                # Training pipelines
 │   ├── configs/             # Training configurations per model size (planned for Phase 5)
 │   ├── sft.ipynb            # Supervised Fine-Tuning notebook (planned for Phase 5)

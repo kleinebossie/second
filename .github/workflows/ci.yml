@@ -23,10 +23,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install python-chess pytest
+        run: pip install python-chess pytest pandas pyarrow langdetect zstandard requests huggingface_hub
 
       - name: Run Python tests
-        run: pytest core/python
+        run: pytest core/python data/sources data/pipeline rewards
 
   ts-core:
     name: TypeScript Core
