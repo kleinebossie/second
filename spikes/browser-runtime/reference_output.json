@@ -1,0 +1,15 @@
+{
+  "framework": "python-transformers",
+  "model_id": "Qwen/Qwen3.5-0.8B",
+  "device": "cuda",
+  "device_name": "NVIDIA RTX PRO 1000 Blackwell Generation Laptop GPU",
+  "prompt_tokens": 409,
+  "generated_tokens": 128,
+  "load_time_seconds": 3.11,
+  "ttft_ms": 1156.29,
+  "tokens_per_second": 34.23,
+  "total_generation_seconds": 4.87,
+  "peak_vram_mb": 1566.35,
+  "generated_text": "White is playing the **Ng5** move to attack the pawn on f7 and the knight on c6, forcing Black to respond.\n\nThis move is good because it creates a fork that threatens to capture the queen on d8 and the rook on h8, while also attacking the knight on c6.\n\nWhite's winning chances drop from 54% to 53% because Black has a solid counterplay with the d5 pawn, which forces White to make a central concession.\n\nWhite's best reply is **d3**, which prepares to block the bishop on c5 and force Black to play **B",
+  "timestamp": "2026-10-28T11:42:45Z"
+}

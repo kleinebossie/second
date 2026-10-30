@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Second — Extension Side Panel Benchmark</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <div class="container" style="padding: 10px;">
+    <header>
+      <div class="header-title">
+        <div>
+          <h1 style="font-size: 1.2rem;">Second — Side Panel</h1>
+          <p class="subtitle">MV3 Extension Runtime Benchmark (Requirement 0.2.3)</p>
+        </div>
+        <div>
+          <span id="hw-badge" class="badge badge-info">Checking WebGPU...</span>
+        </div>
+      </div>
+      <p id="hw-details" class="subtitle" style="margin-top: 6px; font-size: 0.75rem;">Querying GPU adapter...</p>
+    </header>
+
+    <!-- Configuration -->
+    <section class="card" style="padding: 12px; margin-bottom: 12px;">
+      <div class="form-group">
+        <label for="runtime-select">Runtime Engine</label>
+        <select id="runtime-select">
+          <option value="webllm">WebLLM (MLC / WebGPU)</option>
+          <option value="transformers">Transformers.js (ONNX / WebGPU)</option>
+          <option value="wllama">wllama (GGUF / WASM)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="size-select">Model Size</label>
+        <select id="size-select">
+          <option value="0.8B">0.8B</option>
+          <option value="2B" selected>2B</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="model-input">Model ID Override</label>
+        <input type="text" id="model-input" value="Qwen3.5-2B-q4f16_1-MLC" />
+      </div>
+
+      <div class="button-row" style="margin-top: 10px;">
+        <button id="run-btn" class="btn-primary" style="flex: 1;">Run Test</button>
+        <button id="stop-btn" class="btn-danger" disabled>Stop</button>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <span id="progress-text" class="progress-text" style="font-size: 0.75rem;">Ready.</span>
+      </div>
+    </section>
+
+    <!-- Metrics -->
+    <section class="card" style="padding: 12px; margin-bottom: 12px;">
+      <div class="card-title" style="font-size: 0.875rem;">Metrics</div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Load</div>
+          <div id="metric-load-time" class="metric-value" style="font-size: 1rem;">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">TTFT</div>
+          <div id="metric-ttft" class="metric-value" style="font-size: 1rem;">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Speed</div>
+          <div id="metric-speed" class="metric-value" style="font-size: 1rem;">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tokens</div>
+          <div id="metric-tokens" class="metric-value" style="font-size: 1rem;">--</div>
+        </div>
+      </div>
+      <!-- Hidden elements needed by coordinator -->
+      <div style="display: none;">
+        <div id="metric-download-size">--</div>
+        <div id="metric-vram">--</div>
+        <button id="load-python-ref-btn"></button>
+        <span id="prompt-token-badge"></span>
+      </div>
+
+      <div style="margin-top: 10px;">
+        <button id="copy-report-btn" class="btn-secondary" style="width: 100%;" disabled>Copy Markdown Row</button>
+        <div id="report-row-preview" class="report-preview-box" style="font-size: 0.75rem; margin-top: 6px;"></div>
+      </div>
+    </section>
+
+    <!-- Output -->
+    <section class="card" style="padding: 12px; margin-bottom: 12px;">
+      <div class="card-title" style="font-size: 0.875rem;">Generated Text</div>
+      <textarea id="output-text" rows="8" placeholder="Generated text appears here..." readonly></textarea>
+    </section>
+
+    <!-- Logs -->
+    <section class="card" style="padding: 12px;">
+      <div class="card-title" style="font-size: 0.875rem;">Logs</div>
+      <div id="log-container" class="log-box" style="height: 90px;"></div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

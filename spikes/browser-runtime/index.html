@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Second — Browser Runtime Benchmark (Phase 0.2)</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-title">
+        <div>
+          <h1>Second — Browser Runtime Benchmark</h1>
+          <p class="subtitle">Test Qwen 3.5 in Transformers.js (WebGPU), WebLLM (MLC), and wllama (GGUF).</p>
+        </div>
+        <div>
+          <span id="hw-badge" class="badge badge-info">Checking WebGPU...</span>
+        </div>
+      </div>
+      <p id="hw-details" class="subtitle" style="margin-top: 8px;">Querying GPU adapter capabilities...</p>
+    </header>
+
+    <!-- Configuration Card -->
+    <section class="card">
+      <div class="card-title">Benchmark Configuration</div>
+      <div class="grid-3">
+        <div class="form-group">
+          <label for="runtime-select">Runtime Engine</label>
+          <select id="runtime-select">
+            <option value="webllm">WebLLM (MLC / WebGPU)</option>
+            <option value="transformers">Transformers.js (ONNX / WebGPU)</option>
+            <option value="wllama">wllama (GGUF / WASM)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="size-select">Model Size</label>
+          <select id="size-select">
+            <option value="0.8B">0.8B (Fast / Low Memory)</option>
+            <option value="2B" selected>2B (Target Second Base)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="model-input">Model ID or URL Override</label>
+          <input type="text" id="model-input" value="Qwen3.5-2B-q4f16_1-MLC" />
+        </div>
+      </div>
+
+      <details>
+        <summary>View Fixed Test Prompt (<span id="prompt-token-badge">~409 tokens</span>)</summary>
+        <div style="margin-top: 8px;">
+          <textarea id="prompt-preview" rows="8" readonly></textarea>
+        </div>
+      </details>
+
+      <div class="button-row">
+        <button id="run-btn" class="btn-primary">Run Benchmark</button>
+        <button id="stop-btn" class="btn-danger" disabled>Stop / Abort</button>
+        <button id="copy-report-btn" class="btn-secondary" disabled>Copy Markdown Report Row</button>
+        <button id="load-python-ref-btn" class="btn-secondary">Reload Python Ref</button>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <span id="progress-text" class="progress-text">Ready. Choose a runtime and click "Run Benchmark".</span>
+      </div>
+    </section>
+
+    <!-- Metrics Card -->
+    <section class="card">
+      <div class="card-title">Live Performance Metrics</div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Load Time</div>
+          <div id="metric-load-time" class="metric-value">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Download Size</div>
+          <div id="metric-download-size" class="metric-value">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">TTFT (ms)</div>
+          <div id="metric-ttft" class="metric-value">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Speed</div>
+          <div id="metric-speed" class="metric-value">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tokens</div>
+          <div id="metric-tokens" class="metric-value">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">VRAM / Buffer</div>
+          <div id="metric-vram" class="metric-value">--</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px;">
+        <label>Markdown Report Preview (for docs/decisions/runtime.md):</label>
+        <div id="report-row-preview" class="report-preview-box">Run benchmark to generate report row.</div>
+      </div>
+    </section>
+
+    <!-- Output & Comparison Card -->
+    <section class="card">
+      <div class="card-title">Generated Text Comparison</div>
+      <div class="output-comparison">
+        <div>
+          <label for="output-text">Browser Output (Current Run)</label>
+          <textarea id="output-text" rows="10" placeholder="Generated text appears here live..." readonly></textarea>
+        </div>
+        <div>
+          <label for="python-ref-text">Python Reference Output (from reference_output.json)</label>
+          <textarea id="python-ref-text" rows="10" placeholder="Run 'python reference_python.py' to generate reference output..." readonly></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- Execution Logs Card -->
+    <section class="card">
+      <div class="card-title">Execution Log</div>
+      <div id="log-container" class="log-box"></div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

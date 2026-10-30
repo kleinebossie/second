@@ -1,0 +1,20 @@
+{
+  "name": "Second ~400-token benchmark prompt",
+  "task": "explain_move",
+  "level": "club",
+  "detail": "short",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+  "approx_token_count": 409,
+  "system_message": "You are Second, a chess coach that explains moves clearly.\nStockfish provides the facts. You explain why the move is good or bad in simple English.\nFollow these rules:\n- Rely strictly on the provided engine facts.\n- Adapt your language to the requested level (beginner or club).\n- Produce 2 to 4 concise sentences for short explanations.",
+  "user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4\nWhite to move, move 4.\nMove played: Ng5.\nVerdict: Good.\nWhite's winning chances: 54% → 53%.\nBest move: d3.\nBest line: d3 Bc5 c3 d6.\nFacts:\n- Ng5 attacks the pawn on f7 together with the bishop on c4.\n- Pawn on f7 is defended only by the Black king on e8.\n- Black's best reply is d5.\n- After d5, White plays exd5, attacking the knight on c6.\n- The knight on c6 must move, typically to Na5.\n- If 4... Bc5, White has the Fried Liver Attack with Nxf7.\n- White king is safe and ready to castle kingside.\n- Black has not castled; king safety is compromised.\n- Material: equal.\n- Phase: opening.\n- Opening: Italian Game, Two Knights Defense.\n- Checks and captures available: Ng5xf7 forks queen on d8 and rook on h8.\n- Strategic plan: force central concession with d5.",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are Second, a chess coach that explains moves clearly.\nStockfish provides the facts. You explain why the move is good or bad in simple English.\nFollow these rules:\n- Rely strictly on the provided engine facts.\n- Adapt your language to the requested level (beginner or club).\n- Produce 2 to 4 concise sentences for short explanations."
+    },
+    {
+      "role": "user",
+      "content": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4\nWhite to move, move 4.\nMove played: Ng5.\nVerdict: Good.\nWhite's winning chances: 54% → 53%.\nBest move: d3.\nBest line: d3 Bc5 c3 d6.\nFacts:\n- Ng5 attacks the pawn on f7 together with the bishop on c4.\n- Pawn on f7 is defended only by the Black king on e8.\n- Black's best reply is d5.\n- After d5, White plays exd5, attacking the knight on c6.\n- The knight on c6 must move, typically to Na5.\n- If 4... Bc5, White has the Fried Liver Attack with Nxf7.\n- White king is safe and ready to castle kingside.\n- Black has not castled; king safety is compromised.\n- Material: equal.\n- Phase: opening.\n- Opening: Italian Game, Two Knights Defense.\n- Checks and captures available: Ng5xf7 forks queen on d8 and rook on h8.\n- Strategic plan: force central concession with d5."
+    }
+  ]
+}

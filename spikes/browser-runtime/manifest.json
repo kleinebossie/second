@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Second — Browser Runtime Benchmark",
+  "version": "1.0.0",
+  "description": "Test harness for Qwen 3.5 browser runtimes (WebGPU, MLC, GGUF) inside a Manifest V3 extension.",
+  "permissions": [
+    "sidePanel"
+  ],
+  "action": {
+    "default_title": "Open Second Benchmark Side Panel"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "host_permissions": [
+    "https://huggingface.co/*",
+    "https://*.hf.co/*",
+    "https://raw.githubusercontent.com/*",
+    "https://cdn.jsdelivr.net/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "wasm/*",
+        "ort/*",
+        "assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

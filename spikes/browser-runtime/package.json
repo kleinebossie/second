@@ -1,0 +1,22 @@
+{
+  "name": "second-browser-runtime-benchmark",
+  "version": "0.1.0",
+  "description": "Benchmark harness for Qwen 3.5 browser runtimes (WebGPU, MLC, GGUF) for Second",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:ext": "vite build --config vite.config.ext.js",
+    "preview": "vite preview",
+    "ref": "HF_HUB_ENABLE_HF_TRANSFER=1 uv run --with hf-transfer --with 'scipy>=1.14.0' --with torch --with 'transformers>=4.48.0' --with accelerate python reference_python.py"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
+    "@mlc-ai/web-llm": "^0.2.86",
+    "@wllama/wllama": "^3.8.1",
+    "onnxruntime-web": "^1.31.1"
+  },
+  "devDependencies": {
+    "vite": "^6.4.1"
+  }
+}
