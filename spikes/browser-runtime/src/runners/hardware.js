@@ -65,3 +65,10 @@ export async function getHardwareInfo() {
 
   return info;
 }
+
+export function isExtensionEnv() {
+  return (
+    (typeof chrome !== "undefined" && Boolean(chrome?.runtime?.getURL)) ||
+    (typeof window !== "undefined" && window.location?.protocol === "chrome-extension:")
+  );
+}

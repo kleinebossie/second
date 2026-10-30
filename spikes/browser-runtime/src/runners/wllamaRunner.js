@@ -3,11 +3,12 @@
 
 import { Wllama } from "@wllama/wllama/esm/index.js";
 import { createStreamTracker, createInitialResult } from "./metrics.js";
+import { isExtensionEnv } from "./hardware.js";
 
 // In Chrome extensions, load local WASM to follow Manifest V3 rules.
 // In standard web pages, use the CDN binary.
 function getWasmConfig() {
-  if (typeof chrome !== "undefined" && chrome?.runtime?.getURL) {
+  if (isExtensionEnv() && chrome?.runtime?.getURL) {
     return {
       default: chrome.runtime.getURL("wasm/wllama.wasm")
     };

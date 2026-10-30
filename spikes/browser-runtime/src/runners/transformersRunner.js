@@ -3,14 +3,14 @@
 
 import { pipeline, TextStreamer, env } from "@huggingface/transformers";
 import { createStreamTracker, createInitialResult } from "./metrics.js";
+import { isExtensionEnv } from "./hardware.js";
 
 // Configure cache and wasm settings
 env.allowLocalModels = false;
 env.useWasmCache = false;
 
 // Configure local ONNX wasm paths to prevent Manifest V3 CSP violations
-const isExtension = typeof chrome !== "undefined" && Boolean(chrome?.runtime?.getURL);
-const ortPrefix = isExtension ? chrome.runtime.getURL("ort/") : "/ort/";
+const ortPrefix = isExtensionEnv() ? chrome.runtime.getURL("ort/") : "/ort/";
 
 if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.wasmPaths = ortPrefix;

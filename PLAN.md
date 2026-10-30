@@ -615,8 +615,8 @@ Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 | SFT 2B (1,000 steps) | L4 (Colab) | 0.31 | 0.8 | Verified |
 | GRPO 2B (500 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
 | Eval runs (several) | L4 (Colab) | 1.50 | 3.8 | Projected |
-| **Second-1.0-2B training + eval** | | **3.46** | **8.7** | **Within 200 unit monthly budget** |
-| **All Phase 0–7 jobs (including Phase 0)** | | **3.96** | **9.9** | **Within 200 unit monthly budget** |
+| **Second-1.0-2B training + eval (GPU)** | L4 (Colab) | **3.46** | **8.7** | **Within 200 unit monthly budget** |
+| **All Phase 0–7 jobs (GPU + CPU)** | | **5.44** | **9.9** | **Within 200 unit monthly budget** |
 | 0.8B (SFT + GRPO) | L4 (Colab) | ~1.0 | ~2.5 | Projected |
 | 4B (SFT + GRPO) | L4 or A100 | ~6–10 | ~20–35 | Projected |
 | 9B (SFT + GRPO) | A100 | ~15–20 | ~90–150 | Projected |

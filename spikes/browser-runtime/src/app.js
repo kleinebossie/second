@@ -2,7 +2,7 @@
 // ASD-STE100 guidelines: short sentences, active voice, simple terms.
 
 import { PROMPT_DATA } from "./prompt.js";
-import { getHardwareInfo } from "./runners/hardware.js";
+import { getHardwareInfo, isExtensionEnv } from "./runners/hardware.js";
 import { runTransformersBenchmark } from "./runners/transformersRunner.js";
 import { runWebLLMBenchmark } from "./runners/webllmRunner.js";
 import { runWllamaBenchmark } from "./runners/wllamaRunner.js";
@@ -286,7 +286,7 @@ function evaluateCorrectness(outputText, referenceText) {
 }
 
 function generateMarkdownRow(result) {
-  const isMV3 = (typeof chrome !== "undefined" && Boolean(chrome.runtime && chrome.runtime.id)) || window.location.protocol === "chrome-extension:";
+  const isMV3 = isExtensionEnv();
   const mv3Text = isMV3 ? "Yes (Side Panel)" : "No (Web Tab)";
   const sizeMb = result.downloadSizeMB > 0 ? `${result.downloadSizeMB} MB` : "Cached/N/A";
   const ttft = result.ttftMs > 0 ? `${result.ttftMs} ms` : "N/A";

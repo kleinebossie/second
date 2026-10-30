@@ -40,7 +40,7 @@ We must verify kernel compatibility, checkpoint storage, and compute efficiency 
 - **Sequence Length:** 512
 - **Average Step Time:** 1.12 s
 - **Peak VRAM Used:** 5.85 GB (within 24 GB L4 limit)
-- **Errors Encountered:** TRL 0.15 missing Triton dependency. We resolved this by routing loss through standard `Trainer.compute_loss`.
+- **Errors Encountered:** TRL 0.15 missing Triton dependency. We routed loss through standard `Trainer.compute_loss`.
 
 ### 2. GRPO Smoke Test (10 Steps)
 - **Framework Used:** TRL (`GRPOTrainer`)

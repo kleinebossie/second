@@ -15,7 +15,9 @@ We must evaluate three candidate browser runtimes before training starts.
 
 ## Pass Criteria
 - The model must generate correct text with greedy decoding.
-- The model must achieve at least ~15 tokens per second on a mid-range laptop. Per PLAN.md Section 0.2, if the 2B model is below ~15 tokens per second, the 0.8B model serves as the primary browser target and 2B serves as an optional setting.
+- The model must achieve at least ~15 tokens per second on a mid-range laptop.
+- If the 2B model is slower than ~15 tokens per second, the 0.8B model serves as the primary browser target.
+- In that case, the 2B model serves as an optional setting.
 - The runtime must operate inside a Chrome Manifest V3 extension page.
 
 ## Test Configuration
