@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Final
+
+import chess
 
 from .checks import (
     CheckResult,
@@ -18,9 +20,10 @@ from .checks import (
     check_legal_moves,
     check_piece_on_square,
     check_verdict_tone,
+    is_bad_verdict,
     strip_san_suffix,
 )
-from .parser import parse_moves
+from .parser import clean_move_token, parse_moves
 
 # Jargon words prohibited for beginner level fit
 CHESS_JARGON_WORDS: Final[list[str]] = [
@@ -85,9 +88,216 @@ def _split_sentences(text: str) -> list[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
+# Stopwords excluded when matching fact keywords in explanations
+FACT_STOPWORDS: Final[set[str]] = {
+    "after",
+    "before",
+    "white",
+    "black",
+    "best",
+    "reply",
+    "move",
+    "moves",
+    "with",
+    "from",
+    "into",
+    "that",
+    "this",
+    "there",
+    "their",
+    "have",
+    "has",
+    "does",
+    "not",
+    "phase",
+    "material",
+    "equal",
+    "opening",
+    "middlegame",
+    "endgame",
+    "together",
+}
+
+# Problem and consequence keywords for bad move explanations (excludes verdict words)
+PROBLEM_KEYWORDS: Final[list[str]] = [
+    "threat",
+    "threatens",
+    "threatening",
+    "loses",
+    "losing",
+    "lost",
+    "loss",
+    "hangs",
+    "hanging",
+    "undefended",
+    "unprotected",
+    "unanswered",
+    "capture",
+    "captures",
+    "captured",
+    "capturing",
+    "fork",
+    "forks",
+    "forked",
+    "pin",
+    "pins",
+    "pinned",
+    "skewer",
+    "checkmate",
+    "mate",
+    "check",
+    "checks",
+    "defend",
+    "defends",
+    "defending",
+    "protect",
+    "protects",
+    "protecting",
+    "reply",
+    "replies",
+    "weak",
+    "weaken",
+    "weakens",
+    "weakening",
+    "weakness",
+    "expose",
+    "exposes",
+    "exposed",
+    "exposing",
+    "vulnerable",
+    "dangerous",
+    "danger",
+    "passive",
+    "block",
+    "blocks",
+    "blocked",
+    "blocking",
+    "trapped",
+    "trap",
+    "traps",
+    "drop",
+    "drops",
+    "dropped",
+    "waste",
+    "wastes",
+    "wasted",
+    "wasting",
+    "tempo",
+    "time",
+    "allow",
+    "allows",
+    "allowed",
+    "allowing",
+    "give",
+    "gives",
+    "gave",
+    "giving",
+    "leave",
+    "leaves",
+    "left",
+    "leaving",
+    "miss",
+    "misses",
+    "missed",
+    "missing",
+    "overlook",
+    "overlooks",
+    "overlooked",
+    "ignore",
+    "ignores",
+    "ignored",
+    "problem",
+    "trouble",
+    "punish",
+    "punishes",
+    "attack",
+    "attacks",
+    "attacked",
+    "pressure",
+    "advantage",
+    "initiative",
+    "counterplay",
+    "development",
+    "center",
+    "king",
+    "queen",
+    "rook",
+    "bishop",
+    "knight",
+    "pawn",
+]
+
+# Alternative move indicator phrases
+ALT_MOVE_PHRASES: Final[list[str]] = [
+    "better was",
+    "better is",
+    "better move",
+    "better option",
+    "better choice",
+    "better for",
+    "would be better",
+    "would have been better",
+    "might have been better",
+    "mighthave been better",
+    "could have been better",
+    "was better",
+    "is better",
+    "should play",
+    "should have played",
+    "could play",
+    "could have played",
+    "might play",
+    "instead of",
+    "instead",
+    "best move",
+    "best was",
+    "best is",
+    "best option",
+    "prefer",
+    "preferred",
+    "preferable",
+    "needed to",
+    "had to",
+    "ought to",
+    "safer",
+    "stronger",
+    "correct move",
+    "right move",
+    "alternative",
+]
+
+
+def _extract_prompt_field(prompt_text: str, field_prefix: str) -> str:
+    """Extract a header field value from a formatted prompt."""
+    if not prompt_text:
+        return ""
+    pattern = rf"^{re.escape(field_prefix)}\s*([^\s.]+)"
+    match = re.search(pattern, prompt_text, re.MULTILINE)
+    if match:
+        return strip_san_suffix(match.group(1).strip())
+    return ""
+
+
+def _names_best_move(text: str, best_move_san: str) -> bool:
+    """Return true when the text names the best move SAN."""
+    if not best_move_san:
+        return False
+    base_best = strip_san_suffix(best_move_san)
+    named_moves = parse_moves(text)
+    named_bases = [strip_san_suffix(m) for m in named_moves]
+    return best_move_san in named_moves or base_best in named_bases
+
+
+def _has_alternative_idea(text_lower: str, text: str, best_move_san: str) -> bool:
+    """Return true when the text names the best move or an alternative phrase."""
+    if _names_best_move(text, best_move_san):
+        return True
+    return any(phrase in text_lower for phrase in ALT_MOVE_PHRASES)
+
+
 def score_key_point(
     text: str,
-    verdict: str,
+    verdict: str | None = "Good",
     facts: list[str] | None = None,
     best_move_san: str = "",
 ) -> float:
@@ -95,43 +305,39 @@ def score_key_point(
 
     When the move is a mistake, score identification of threat and better move.
     When the move is good, score identification of the main positional plan.
+    Cap fact matching at two facts so listing all facts gives no extra reward.
     Return a score between 0.0 and 1.0.
     """
-    verdict_clean = verdict.strip().capitalize()
-    is_bad = verdict_clean in ("Inaccuracy", "Mistake", "Blunder")
+    is_bad = is_bad_verdict(verdict)
     text_lower = text.lower()
+    text_words = set(_tokenize_words(text))
+
+    # Count matched facts across non-generic facts (anti-hacking cap at 2 facts)
+    matched_facts = 0
+    if facts:
+        for fact in facts:
+            fact_stripped = fact.strip()
+            if fact_stripped.startswith(("Phase:", "Material:")):
+                continue
+            fact_words = [
+                w for w in _tokenize_words(fact)
+                if len(w) > 3 and w not in FACT_STOPWORDS
+            ]
+            if any(w in text_words or w in text_lower for w in fact_words):
+                matched_facts += 1
 
     if is_bad:
-        # Check problem identification (threat, lost material, capture, or reply)
-        has_problem = False
-        problem_keywords = [
-            "threat",
-            "threatens",
-            "loses",
-            "hangs",
-            "hanging",
-            "capture",
-            "captures",
-            "fork",
-            "pin",
-            "defend",
-            "reply",
-            "blunder",
-            "mistake",
-        ]
-        if any(kw in text_lower for kw in problem_keywords):
-            has_problem = True
+        # Check problem identification (threat, lost material, or specific tactical fact)
+        has_problem = matched_facts >= 1
+        if not has_problem:
+            if any(
+                (kw in text_words if " " not in kw else kw in text_lower)
+                for kw in PROBLEM_KEYWORDS
+            ):
+                has_problem = True
 
-        # Check alternative move identification
-        has_better = False
-        if best_move_san:
-            base_best = strip_san_suffix(best_move_san)
-            if best_move_san in text or base_best in text:
-                has_better = True
-        if not has_better:
-            alt_keywords = ["better was", "should play", "instead of", "better move"]
-            if any(kw in text_lower for kw in alt_keywords):
-                has_better = True
+        # Check alternative move or idea identification
+        has_better = _has_alternative_idea(text_lower, text, best_move_san)
 
         if has_problem and has_better:
             return 1.0
@@ -139,58 +345,96 @@ def score_key_point(
             return 0.5
         return 0.0
 
-    # For good or best moves: check alignment with key facts
+    # For good moves, best moves, or position explanations: check alignment with facts
     if not facts:
         return 1.0
-
-    # Extract keywords from the first three facts
-    matched_facts = 0
-    facts_to_check = facts[:3]
-    for fact in facts_to_check:
-        fact_words = [w for w in _tokenize_words(fact) if len(w) > 3]
-        if any(w in text_lower for w in fact_words):
-            matched_facts += 1
 
     if matched_facts >= 2:
         return 1.0
     if matched_facts == 1:
         return 0.7
+
+    # Check if explanation discusses core positional ideas even when phrasing differs
+    positional_keywords = {
+        "develop",
+        "develops",
+        "developing",
+        "development",
+        "center",
+        "centre",
+        "central",
+        "castle",
+        "castles",
+        "castling",
+        "castled",
+        "attack",
+        "attacks",
+        "attacking",
+        "defend",
+        "defends",
+        "defending",
+        "defense",
+        "protect",
+        "protects",
+        "protecting",
+        "protected",
+        "control",
+        "controls",
+        "controlling",
+        "active",
+        "activity",
+        "space",
+        "pressure",
+        "threat",
+        "threatens",
+        "capture",
+        "captures",
+        "exchange",
+        "trade",
+        "trades",
+        "open",
+        "opens",
+        "file",
+        "diagonal",
+        "rank",
+        "king",
+        "queen",
+        "rook",
+        "bishop",
+        "knight",
+        "pawn",
+        "pawns",
+        "piece",
+        "pieces",
+        "endgame",
+        "opening",
+        "middlegame",
+    }
+    if len(text_words.intersection(positional_keywords)) >= 2:
+        return 0.7
+
     return 0.4
 
 
 def score_better_move(
     text: str,
-    verdict: str,
+    verdict: str | None = "Good",
     best_move_san: str = "",
 ) -> float:
     """Score whether explanation identifies the superior move.
 
-    When the verdict is Best or Good, return 1.0.
+    When the verdict is Best, Good, Only move, or missing, return 1.0.
     When the verdict is bad and text names the best move, return 1.0.
     When the verdict is bad and text mentions an alternative idea, return 0.5.
     Otherwise return 0.0.
     """
-    verdict_clean = verdict.strip().capitalize()
-    if verdict_clean in ("Best", "Good", "Only move"):
+    if not is_bad_verdict(verdict):
         return 1.0
 
-    if best_move_san:
-        base_best = strip_san_suffix(best_move_san)
-        named_moves = parse_moves(text)
-        named_bases = [strip_san_suffix(m) for m in named_moves]
-        if best_move_san in named_moves or base_best in named_bases:
-            return 1.0
+    if _names_best_move(text, best_move_san):
+        return 1.0
 
-    text_lower = text.lower()
-    alt_indicators = [
-        "better was",
-        "better is",
-        "instead of",
-        "best move",
-        "should have played",
-        "should play",
-    ]
-    if any(phrase in text_lower for phrase in alt_indicators):
+    if any(phrase in text.lower() for phrase in ALT_MOVE_PHRASES):
         return 0.5
 
     return 0.0
@@ -201,10 +445,19 @@ def score_length(text: str, detail: str) -> float:
 
     For short detail, target word band is 25 to 80 words.
     For long detail, target word band is 80 to 200 words.
+    Penalize explanations that contain mostly move notation without prose.
     Score smoothly decreases outside the designated band.
     """
     words = text.split()
     count = len(words)
+    if count == 0:
+        return 0.0
+
+    # Anti-hacking guard: penalize outputs that list moves without prose words
+    moves_set = set(parse_moves(text))
+    move_tokens = sum(1 for w in words if clean_move_token(w) in moves_set)
+    if (move_tokens / count) > 0.5:
+        return 0.0
 
     if detail.lower() == "long":
         if 80 <= count <= 200:
@@ -255,34 +508,42 @@ def score_level_fit(text: str, level: str) -> float:
 
 
 def score_not_copied(text: str, facts: list[str] | None = None) -> float:
-    """Score whether explanation avoids verbatim fact n-gram overlap.
+    """Score whether explanation avoids verbatim fact overlap.
 
-    Extract 4-grams and 5-grams from explanation and facts.
+    Check both 4-gram overlap and verbatim short fact copying.
     Penalize higher overlap to promote original phrasing.
     """
     if not facts:
         return 1.0
 
-    text_words = _tokenize_words(text)
-    if len(text_words) < 4:
+    text_lower = re.sub(r"\s+", " ", text.lower()).strip()
+    if not text_lower:
         return 1.0
 
-    # Build n-grams from text
+    # Check verbatim copying of short fact lines (< 4 words)
+    short_fact_matches = 0
+    for f in facts:
+        f_clean = re.sub(r"\s+", " ", f.lower()).strip().rstrip(".")
+        if f_clean and f_clean in text_lower:
+            short_fact_matches += 1
+
+    text_words = _tokenize_words(text)
+    if len(text_words) < 4:
+        return 0.0 if short_fact_matches > 0 else 1.0
+
+    # Build 4-grams from text
     text_4grams = set(
         tuple(text_words[i : i + 4]) for i in range(len(text_words) - 3)
     )
 
-    # Build n-grams from facts
+    # Build 4-grams from facts
     fact_4grams: set[tuple[str, ...]] = set()
     for f in facts:
         f_words = _tokenize_words(f)
         for i in range(len(f_words) - 3):
             fact_4grams.add(tuple(f_words[i : i + 4]))
 
-    if not text_4grams or not fact_4grams:
-        return 1.0
-
-    overlap = len(text_4grams.intersection(fact_4grams))
+    overlap = len(text_4grams.intersection(fact_4grams)) + short_fact_matches
     overlap_rate = overlap / len(text_4grams)
 
     # Overlap rate 0.0 gives 1.0; overlap rate >= 0.5 gives 0.0
@@ -319,7 +580,7 @@ def compute_reward(
     fen: str,
     level: str = "club",
     detail: str = "short",
-    verdict: str = "Good",
+    verdict: str | None = "Good",
     move_uci: str | None = None,
     best_move_san: str = "",
     facts: list[str] | None = None,
@@ -331,6 +592,26 @@ def compute_reward(
     If any hard check fails, assign scalar reward of -1.0.
     If all hard checks pass, compute weighted sum of soft scores.
     """
+    resolved_best_san = best_move_san or _extract_prompt_field(prompt_text, "Best move:")
+
+    # Combine prompt_text, facts, played move, and best move for grounding
+    grounding_parts: list[str] = []
+    if prompt_text:
+        grounding_parts.append(prompt_text)
+    if facts:
+        grounding_parts.extend(facts)
+    if resolved_best_san:
+        grounding_parts.append(f"Best move: {resolved_best_san}.")
+    if move_uci and fen:
+        try:
+            board = chess.Board(fen)
+            played_move = chess.Move.from_uci(move_uci)
+            if played_move in board.legal_moves:
+                grounding_parts.append(f"Move played: {board.san(played_move)}.")
+        except ValueError:
+            pass
+    grounding_source = "\n".join(grounding_parts)
+
     # 1. Run hard checks
     hard_results: dict[str, CheckResult] = {
         "legal_moves": check_legal_moves(
@@ -341,7 +622,7 @@ def compute_reward(
         ),
         "grounded_moves": check_grounded_moves(
             text=text,
-            prompt_or_facts=prompt_text or (facts or []),
+            prompt_or_facts=grounding_source,
         ),
         "piece_on_square": check_piece_on_square(
             text=text,
@@ -370,12 +651,12 @@ def compute_reward(
             text=text,
             verdict=verdict,
             facts=facts,
-            best_move_san=best_move_san,
+            best_move_san=resolved_best_san,
         ),
         "better_move": score_better_move(
             text=text,
             verdict=verdict,
-            best_move_san=best_move_san,
+            best_move_san=resolved_best_san,
         ),
         "length": score_length(
             text=text,

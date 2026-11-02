@@ -60,7 +60,7 @@ PIECE_THEN_SQUARE_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
-# Regex to find square followed by piece (e.g. "the e5 knight", "c4 bishop")
+# Regex to find square followed by piece (e.g. "the e5 knight", "c4 bishop", "e5-knight")
 SQUARE_THEN_PIECE_RE: Final[re.Pattern[str]] = re.compile(
     r"\b(?:the\s+|a\s+|an\s+)?(?:white\s+|black\s+)?([a-h][1-8])\s+"
     r"(pawn|knight|bishop|rook|queen|king)s?\b",
@@ -69,28 +69,56 @@ SQUARE_THEN_PIECE_RE: Final[re.Pattern[str]] = re.compile(
 
 # Words indicating a square context rather than a pawn move
 SQUARE_CONTEXT_BEFORE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:\b(?:on|onto|at|from|into|to|towards?|square|squares|the|an?|this|that|its|"
-    r"reach(?:es|ed)?|occup(?:y|ies|ied)|control(?:s|led|ling)?|"
-    r"attack(?:s|ed|ing)?|defend(?:s|ed|ing)?|protect(?:s|ed|ing)?|"
-    r"aim(?:s|ed|ing)?\s+at|target(?:s|ed|ing)?)\s+|"
-    r"\b(?:pawn|knight|bishop|rook|queen|king)s?\s+(?:to\s+)?)$",
+    r"(?:"
+    r"\b(?:"
+    r"on|onto|at|from|into|towards?|in|of|via|around|near|through|across|"
+    r"the|an?|this|that|its|"
+    r"squares?|outposts?|pawn\s+in|"
+    r"reach(?:es|ed)?|occup(?:y|ies|ied)|"
+    r"aim(?:s|ed|ing)?\s+at|target(?:s|ed|ing)?|"
+    r"weakens?|weakened|weakening|"
+    r"guards?|guarded|guarding|"
+    r"surrenders?|surrendered|surrendering|"
+    r"hits?|hitting|"
+    r"abandons?|abandoned|abandoning|"
+    r"blocks?|blocked|blocking|"
+    r"eyes?|eyeing|"
+    r"covers?|covered|covering|"
+    r"supports?|supported|supporting|"
+    r"pressures?|pressured|pressuring|"
+    r"control(?:s|led|ling)?|"
+    r"attack(?:s|ed|ing)?|"
+    r"defend(?:s|ed|ing)?|"
+    r"protect(?:s|ed|ing)?|"
+    r"vacat(?:es|ed|ing)|"
+    r"head(?:s|ed|ing)?\s+for|"
+    r"man(?:eu|oeu)ver(?:s|ed|ing)?\s+(?:a\s+)?(?:pawn\s+)?to|"
+    r"way\s+to\s+get\s+(?:a\s+)?(?:pawn\s+)?to"
+    r")\s+|"
+    r"(?<!\bpawn )(?<!pawns )\bto\s+|"
+    r"\b(?:pawn|pawns)\s+|"
+    r"\b(?:knight|bishop|rook|queen|king)s?\s+(?:to\s+)?|"
+    r"\b[a-h][1-8]\s*(?:,\s*|\s+and\s+|\s+or\s+)"
+    r")$",
     re.IGNORECASE,
 )
 
 SQUARE_CONTEXT_AFTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\s*(?:square|squares|pawn|knight|bishop|rook|queen|king)s?\b",
+    r"^\s*,?\s*(?:"
+    r"(?:square|squares|pawn|knight|bishop|rook|queen|king)s?\b|"
+    r"outposts?\b|"
+    r"diagonals?\b|"
+    r"weakness(?:es)?\b|"
+    r"holes?\b|"
+    r"blockade\b|"
+    r"(?:is|are)\s+weak\b|"
+    r"(?:(?:is|are)\s+)?under\s+control\b|"
+    r"(?:[a-h][1-8]\s*,?\s*)?(?:and|or)\s+[a-h][1-8]\s+(?:square|squares|outposts?|pawn|pawns|diagonals?|weakness(?:es)?|(?:is|are)\s+weak)\b"
+    r")",
     re.IGNORECASE,
 )
 
-# Move context words that signal an intention to move
-MOVE_CONTEXT_BEFORE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:\b(?:play|plays|played|playing|move|moves|moved|moving|"
-    r"push|pushes|pushed|pushing|advance|advances|advanced|advancing|"
-    r"after|with|try|tries|tried|instead of|better is|best is|allows?)\s+|\b\d+\.+\s*)$",
-    re.IGNORECASE,
-)
-
-# Tone phrases
+# Tone phrases used for verdict tone contradiction checks
 POSITIVE_TONE_PHRASES: Final[list[str]] = [
     "great move",
     "excellent move",
@@ -122,14 +150,30 @@ NEGATIVE_TONE_PHRASES: Final[list[str]] = [
     "horrible move",
     "blunder",
     "blunders",
+    "blundered",
     "mistake",
     "mistakes",
     "inaccuracy",
     "inaccuracies",
+    "inaccurate",
+    "error",
+    "errors",
+    "inferior",
+    "suboptimal",
+    "questionable",
     "dubious",
     "losing",
     "loses",
     "ruins",
+]
+
+NEUTRAL_TONE_PHRASES: Final[list[str]] = [
+    "equal",
+    "equality",
+    "balanced",
+    "drawn",
+    "drawish",
+    "winning",
 ]
 
 
@@ -138,6 +182,7 @@ def clean_move_token(token: str) -> str:
 
     Remove leading move numbers like 14. or 14...
     Remove leading and trailing brackets and punctuation.
+    Normalize numeric castling notation to uppercase O-O or O-O-O.
     Preserve check and mate characters at the end of the move.
     """
     token = token.strip()
@@ -149,6 +194,10 @@ def clean_move_token(token: str) -> str:
     # Strip trailing punctuation except check and mate
     while token and token[-1] in ".,;:!?'\")]}":
         token = token[:-1]
+
+    # Normalize numeric castling notation to standard SAN O-O / O-O-O
+    token = re.sub(r"^0-0-0(?=[+#]?$)", "O-O-O", token)
+    token = re.sub(r"^0-0(?=[+#]?$)", "O-O", token)
 
     return token
 
@@ -248,26 +297,41 @@ def parse_piece_square_pairs(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def find_tone_words(text: str) -> dict[str, list[str]]:
-    """Find positive and negative tone words in text.
+def _match_phrase_list(text_lower: str, phrases: list[str]) -> list[str]:
+    """Find all matching phrases from a candidate list in lowercase text."""
+    found: list[str] = []
+    for phrase in phrases:
+        pattern = rf"\b{re.escape(phrase)}\b"
+        if re.search(pattern, text_lower):
+            found.append(phrase)
+    return found
 
-    Return a dictionary with positive and negative matches.
+
+def find_tone_words(text: str) -> dict[str, list[str]]:
+    """Find positive, negative, and neutral tone words in text.
+
+    Return a dictionary with positive, negative, and neutral matches.
     """
     text_lower = text.lower()
-    positive_found: list[str] = []
-    negative_found: list[str] = []
-
-    for phrase in POSITIVE_TONE_PHRASES:
-        pattern = rf"\b{re.escape(phrase)}\b"
-        if re.search(pattern, text_lower):
-            positive_found.append(phrase)
-
-    for phrase in NEGATIVE_TONE_PHRASES:
-        pattern = rf"\b{re.escape(phrase)}\b"
-        if re.search(pattern, text_lower):
-            negative_found.append(phrase)
-
     return {
-        "positive": positive_found,
-        "negative": negative_found,
+        "positive": _match_phrase_list(text_lower, POSITIVE_TONE_PHRASES),
+        "negative": _match_phrase_list(text_lower, NEGATIVE_TONE_PHRASES),
+        "neutral": _match_phrase_list(text_lower, NEUTRAL_TONE_PHRASES),
     }
+
+
+def parse_verdict_words(text: str) -> list[str]:
+    """Find all verdict and tone words in text.
+
+    Collect positive, negative, and neutral tone words.
+    Return an ordered list of unique verdict terms found in text.
+    """
+    tone_dict = find_tone_words(text)
+    combined: list[str] = []
+    seen: set[str] = set()
+    for category in ("positive", "negative", "neutral"):
+        for word in tone_dict[category]:
+            if word not in seen:
+                seen.add(word)
+                combined.append(word)
+    return combined

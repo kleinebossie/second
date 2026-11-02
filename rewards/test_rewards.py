@@ -27,6 +27,7 @@ from rewards.parser import (
     parse_moves,
     parse_piece_square_pairs,
     parse_squares,
+    parse_verdict_words,
 )
 from rewards.scorer import (
     compute_reward,
@@ -47,12 +48,14 @@ ITALIAN_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4
 
 
 def test_clean_move_token() -> None:
-    """Verify that move token cleaning removes numbers and punctuation."""
+    """Verify that move token cleaning removes numbers and normalizes castling."""
     assert clean_move_token("14.Nxf7") == "Nxf7"
     assert clean_move_token("14...Nxf7!") == "Nxf7"
     assert clean_move_token("(e4)") == "e4"
     assert clean_move_token("Qh5+,") == "Qh5+"
     assert clean_move_token("O-O-O.") == "O-O-O"
+    assert clean_move_token("0-0.") == "O-O"
+    assert clean_move_token("0-0-0+") == "O-O-O+"
     assert clean_move_token("Qxf7#") == "Qxf7#"
 
 
@@ -91,10 +94,18 @@ def test_parse_moves_rejects_plain_english() -> None:
 
 def test_parse_moves_distinguishes_squares() -> None:
     """Verify that square locations are not parsed as moves."""
-    text = "The knight on e5 attacks the pawn on f7. White should play d4."
+    text = (
+        "The knight on e5 attacks the pawn on f7. "
+        "White guards g4 and h5, weakens h3, and surrenders d5. "
+        "White pushes the pawn to d4."
+    )
     moves = parse_moves(text)
     assert "e5" not in moves
     assert "f7" not in moves
+    assert "g4" not in moves
+    assert "h5" not in moves
+    assert "h3" not in moves
+    assert "d5" not in moves
     assert "d4" in moves
 
 
@@ -124,19 +135,33 @@ def test_parse_piece_square_pairs() -> None:
     assert ("knight", "f3") not in move_pairs
 
 
-def test_find_tone_words() -> None:
-    """Verify detection of positive and negative verdict words."""
+def test_find_tone_words_and_verdict_words() -> None:
+    """Verify detection of positive, negative, and neutral verdict words."""
     good_text = "This is a great move and an excellent strategic decision."
-    bad_text = "This blunder is a terrible mistake that loses material."
+    bad_text = "This blunder is a terrible mistake and an inaccurate move."
+    neutral_text = "The position remains equal and balanced."
 
     good_tones = find_tone_words(good_text)
     bad_tones = find_tone_words(bad_text)
+    neutral_tones = find_tone_words(neutral_text)
 
     assert "great move" in good_tones["positive"]
     assert "excellent" in good_tones["positive"]
     assert "blunder" in bad_tones["negative"]
     assert "mistake" in bad_tones["negative"]
     assert "terrible" in bad_tones["negative"]
+    assert "inaccurate" in bad_tones["negative"]
+    assert "equal" in neutral_tones["neutral"]
+    assert "balanced" in neutral_tones["neutral"]
+
+    verdict_words = parse_verdict_words(
+        "This mistake loses the equal position after a good move was missed."
+    )
+    assert "good move" in verdict_words
+    assert "mistake" in verdict_words
+    assert "loses" in verdict_words
+    assert "equal" in verdict_words
+    assert "winning" in parse_verdict_words("White is winning.")
 
     # Verify that standalone winning does not trigger positive praise
     eval_text = "White is winning after this blunder."
@@ -151,7 +176,7 @@ def test_find_tone_words() -> None:
 def test_check_legal_moves_valid() -> None:
     """Verify that legal moves in position pass the check."""
     # In Italian Game: Ng5 is legal, d3 is legal, O-O is legal
-    text = "White can play Ng5 or d3 or castle O-O."
+    text = "White can play Ng5 or d3 or castle O-O or 0-0."
     result = check_legal_moves(text, ITALIAN_FEN)
     assert result.passed is True
 
@@ -166,11 +191,14 @@ def test_check_legal_moves_after_played_move() -> None:
 
 
 def test_check_legal_moves_from_facts() -> None:
-    """Verify that moves in facts pass even if deep in variation."""
+    """Verify that moves in facts pass at their legal place in variation."""
     facts = ["Best line: d3 Bc5 c3 d6."]
     text = "White should continue with c3 and d6."
     result = check_legal_moves(text, ITALIAN_FEN, facts=facts)
     assert result.passed is True
+
+    wrong_turn = "White should begin with Bc5."
+    assert check_legal_moves(wrong_turn, ITALIAN_FEN, facts=facts).passed is False
 
 
 def test_check_legal_moves_illegal_fails() -> None:
@@ -256,10 +284,19 @@ def test_check_verdict_tone_opponent_criticism_passes() -> None:
 
 
 def test_check_verdict_tone_best_move_mention_on_blunder_passes() -> None:
-    """Verify that naming the best move on a blunder passes."""
+    """Verify that naming the best move or opponent move on a blunder passes."""
     text = "This blunder loses a pawn. The best move was d3."
     result = check_verdict_tone(text, "Blunder")
     assert result.passed is True
+
+    opp_text = "A blunder that gives Black a great move."
+    assert check_verdict_tone(opp_text, "Blunder").passed is True
+
+    bad_subject = "White's blunder is a great move."
+    assert check_verdict_tone(bad_subject, "Blunder").passed is False
+
+    none_res = check_verdict_tone("The position is equal.", None)
+    assert none_res.passed is True
 
 
 def test_check_format_clean_passes() -> None:
@@ -268,13 +305,24 @@ def test_check_format_clean_passes() -> None:
     result = check_format(text)
     assert result.passed is True
 
+    short_text = "White wins."
+    assert check_format(short_text).passed is True
+
+    move_num_text = "1. e4 controls the center and opens lines for the bishop."
+    assert check_format(move_num_text).passed is True
+
 
 def test_check_format_markdown_fails() -> None:
     """Verify that markdown formatting fails the check."""
     assert check_format("# Header\nProse text.").passed is False
+    assert check_format("Header\n======\nProse text.").passed is False
+    assert check_format("- Single bullet item").passed is False
     assert check_format("- Item 1\n- Item 2").passed is False
     assert check_format("1. First item\n2. Second item").passed is False
+    assert check_format("> Blockquote line").passed is False
     assert check_format("This is **very** important.").passed is False
+    assert check_format("This is *italic* text.").passed is False
+    assert check_format("Play `Ng5` immediately.").passed is False
     assert check_format("```python\nmove = 1\n```").passed is False
 
 
@@ -287,6 +335,9 @@ def test_check_format_non_english_fails() -> None:
     """Verify that non-English text fails format check."""
     french_text = "Les blancs jouent le fou en c4 pour attaquer les noirs."
     assert check_format(french_text).passed is False
+
+    short_french = "C'est un tres bon coup."
+    assert check_format(short_french).passed is False
 
 
 def test_check_format_repeats_prompt_fails() -> None:
@@ -322,6 +373,21 @@ def test_score_key_point() -> None:
     # Blunder with only problem
     blunder_half = "This move loses a piece to Black's capture."
     assert score_key_point(blunder_half, "Blunder") == 0.5
+
+    # Minimal reward-hacking templates without real problem reason get at most 0.5
+    minimal_verdict = "This is a mistake. Better was d3."
+    assert score_key_point(minimal_verdict, "Mistake", best_move_san="d3") == 0.5
+
+    minimal_material = "Material is equal; best move d3."
+    assert (
+        score_key_point(
+            minimal_material,
+            "Mistake",
+            best_move_san="d3",
+            facts=["Material: equal.", "Phase: opening."],
+        )
+        == 0.5
+    )
 
     # Good move matching facts
     facts = ["Ng5 attacks the pawn on f7 together with the bishop on c4."]
@@ -360,6 +426,10 @@ def test_score_length() -> None:
     words_100 = "word " * 100
     assert score_length(words_100, "long") == 1.0
 
+    # Move-list spam gets 0.0
+    move_spam = "Ng5 d5 exd5 Nxd5 Bc4 Be6 Qe2 O-O d3 Nc6"
+    assert score_length(move_spam, "short") == 0.0
+
 
 def test_score_level_fit() -> None:
     """Verify level fit score for club and beginner."""
@@ -380,6 +450,10 @@ def test_score_not_copied() -> None:
 
     assert score_not_copied(exact_copy, facts) < 0.5
     assert score_not_copied(paraphrase, facts) == 1.0
+
+    short_facts = ["Material: equal.", "Phase: opening."]
+    short_copy = "Material: equal. Phase: opening. White develops the bishop."
+    assert score_not_copied(short_copy, short_facts) < 1.0
 
 
 def test_score_no_repeats() -> None:
@@ -437,24 +511,57 @@ def test_compute_reward_success() -> None:
     assert res.hard_checks["format"].passed is True
 
 
+def test_compute_reward_explain_position_verdict_none() -> None:
+    """Verify that compute_reward handles explain_position records with verdict None."""
+    facts = [
+        "Top candidate moves: d3, Ng5, O-O.",
+        "Material: equal.",
+        "Phase: opening.",
+    ]
+    prompt_text = (
+        "task: explain_position\nlevel: club\ndetail: short\n\n"
+        f"FEN: {ITALIAN_FEN}\nWhite to move, move 4.\n"
+        "White's winning chances: 54%.\nBest move: d3.\nBest line: d3 Bc5 c3 d6.\n"
+        "Facts:\n- Top candidate moves: d3, Ng5, O-O.\n- Material: equal.\n- Phase: opening."
+    )
+    explanation = (
+        "White has a solid opening position with equal material. "
+        "The best continuation is d3 to support the center and open the diagonal for the bishop. "
+        "White can also consider Ng5 or castling O-O to bring the king to safety."
+    )
+    res = compute_reward(
+        text=explanation,
+        fen=ITALIAN_FEN,
+        level="club",
+        detail="short",
+        verdict=None,
+        move_uci=None,
+        facts=facts,
+        prompt_text=prompt_text,
+    )
+    assert res.passed_all_hard is True
+    assert res.reward >= 0.70
+    assert res.soft_scores["better_move"] == 1.0
+
+
 def test_human_commentary_reward_distribution() -> None:
     """Verify reward distribution on human commentary examples.
 
     Check compute_reward on grounded human explanations.
-    If sft_train.jsonl exists, sample up to 500 records.
-    Verify that hard checks produce zero false alarms.
-    Verify that mean soft score is at least 0.60.
+    If sft_train.jsonl exists, evaluate the first 500 records and 500 grounded records.
+    Verify that hard checks produce zero false alarms on grounded human records.
+    Verify that mean compute_reward across the 500 grounded records is at least 0.60.
     """
     human_samples = [
         (
-            "White develops the bishop to c4 and attacks the sensitive f7 square. Best move is Bc4.",
+            "White develops the pawn to d3 and supports the bishop on c4. Best move is d3.",
             ITALIAN_FEN,
             "club",
             "short",
             "Good",
-            "Bc4",
-            ["Bc4 develops bishop to c4.", "White attacks f7."],
-            "FEN: ... Move played: Bc4.\nVerdict: Good.\nBest move: Bc4.\nFacts:\n- Bc4 develops bishop to c4.",
+            "d3",
+            ["d3 supports the pawn on e4 and bishop on c4.", "White attacks f7."],
+            "FEN: ... Move played: d3.\nVerdict: Good.\nBest move: d3.\nFacts:\n- d3 supports the pawn on e4.",
         ),
         (
             "White attacks the pawn on f7 with two active pieces. Black defends with d5.",
@@ -465,6 +572,16 @@ def test_human_commentary_reward_distribution() -> None:
             "Ng5",
             ["After Ng5, Black plays d5.", "White attacks f7."],
             "FEN: ... Move played: Ng5.\nVerdict: Good.\nBest move: Ng5.\nFacts:\n- After Ng5, Black plays d5.",
+        ),
+        (
+            "This blunder leaves the f7 pawn undefended. Better was d3 to support the center.",
+            ITALIAN_FEN,
+            "club",
+            "short",
+            "Blunder",
+            "d3",
+            ["Best move: d3.", "White leaves f7 vulnerable."],
+            "FEN: ... Move played: Ng5.\nVerdict: Blunder.\nBest move: d3.\nFacts:\n- Best move: d3.",
         ),
     ]
 
@@ -484,55 +601,62 @@ def test_human_commentary_reward_distribution() -> None:
 
     sft_train_path = Path("data/processed/sft_train.jsonl")
     if sft_train_path.exists():
-        records: list[dict[str, Any]] = []
+        first_500: list[dict[str, Any]] = []
+        grounded_500: list[dict[str, Any]] = []
         with open(sft_train_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    records.append(json.loads(line))
-                if len(records) >= 500:
+                if not line:
+                    continue
+                record = json.loads(line)
+                if len(first_500) < 500:
+                    first_500.append(record)
+                prompt_and_facts = [record.get("user_message", "")] + list(
+                    record.get("facts", [])
+                )
+                if (
+                    len(grounded_500) < 500
+                    and check_grounded_moves(
+                        record.get("comment", ""), prompt_and_facts
+                    ).passed
+                ):
+                    grounded_500.append(record)
+                if len(first_500) >= 500 and len(grounded_500) >= 500:
                     break
 
-        assert len(records) > 0
+        assert len(first_500) == 500
+        assert len(grounded_500) == 500
 
-        legal_fails = 0
-        piece_fails = 0
-        tone_fails = 0
-        format_fails = 0
-        soft_scores: list[float] = []
+        for r in first_500:
+            res = compute_reward(
+                text=r.get("comment", ""),
+                fen=r.get("fen", ""),
+                level=r.get("level", "club"),
+                detail=r.get("detail", "short"),
+                verdict=r.get("verdict"),
+                move_uci=r.get("move_uci"),
+                facts=r.get("facts", []),
+                prompt_text=r.get("user_message", ""),
+            )
+            assert res.hard_checks["legal_moves"].passed is True
+            assert res.hard_checks["piece_on_square"].passed is True
+            assert res.hard_checks["verdict_tone"].passed is True
+            assert res.hard_checks["format"].passed is True
+            assert res.hard_checks["beginner_jargon"].passed is True
 
-        for r in records:
-            c = r.get("comment", "")
-            fen = r.get("fen", "")
-            move_uci = r.get("move_uci")
-            facts = r.get("facts", [])
-            verdict = r.get("verdict", "Good")
-            prompt = r.get("user_message", "")
-            level = r.get("level", "club")
-            detail = r.get("detail", "short")
+        grounded_rewards: list[float] = []
+        for r in grounded_500:
+            res = compute_reward(
+                text=r.get("comment", ""),
+                fen=r.get("fen", ""),
+                level=r.get("level", "club"),
+                detail=r.get("detail", "short"),
+                verdict=r.get("verdict"),
+                move_uci=r.get("move_uci"),
+                facts=r.get("facts", []),
+                prompt_text=r.get("user_message", ""),
+            )
+            assert res.passed_all_hard is True
+            grounded_rewards.append(res.reward)
 
-            # Check hard rules
-            if not check_legal_moves(text=c, fen=fen, move_uci=move_uci, facts=facts).passed:
-                legal_fails += 1
-            if not check_piece_on_square(text=c, fen=fen, move_uci=move_uci).passed:
-                piece_fails += 1
-            if not check_verdict_tone(text=c, verdict=verdict).passed:
-                tone_fails += 1
-            if not check_format(text=c, prompt_text=prompt).passed:
-                format_fails += 1
-
-            # Check soft scores
-            s_len = score_length(text=c, detail=detail)
-            s_lvl = score_level_fit(text=c, level=level)
-            s_nc = score_not_copied(text=c, facts=facts)
-            s_nr = score_no_repeats(text=c)
-            mean_soft = (s_len + s_lvl + s_nc + s_nr) / 4.0
-            soft_scores.append(mean_soft)
-
-        assert legal_fails == 0
-        assert piece_fails == 0
-        assert tone_fails == 0
-        assert format_fails == 0
-        mean_soft_score = sum(soft_scores) / len(soft_scores)
-        assert mean_soft_score >= 0.60
-
+        assert (sum(grounded_rewards) / len(grounded_rewards)) >= 0.60

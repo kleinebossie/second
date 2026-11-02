@@ -20,6 +20,7 @@ from .parser import (
     parse_moves,
     parse_piece_square_pairs,
     parse_squares,
+    parse_verdict_words,
 )
 from .scorer import (
     RewardResult,
@@ -46,6 +47,7 @@ __all__ = [
     "parse_moves",
     "parse_piece_square_pairs",
     "parse_squares",
+    "parse_verdict_words",
     "score_better_move",
     "score_key_point",
     "score_length",
