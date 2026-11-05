@@ -21,7 +21,7 @@ from training.sft_data import (
 )
 
 
-class DummyLinear:
+class Linear:
     """Mock linear module for testing."""
 
     def __init__(self, in_features: int = 64, out_features: int = 64) -> None:
@@ -100,12 +100,12 @@ def test_load_default_sft_config() -> None:
         ("base_model", "meta-llama/Llama-3", "Invalid base_model"),
         ("text_only", False, "Invalid text_only"),
         ("enable_thinking", True, "Invalid enable_thinking"),
-        ("lora_r", 16, "Invalid lora_r"),
-        ("lora_alpha", 16, "Invalid lora_alpha"),
+        ("lora_r", 0, "Invalid lora_r"),
+        ("lora_alpha", 0, "Invalid lora_alpha"),
         ("target_modules", "q_proj", "Invalid target_modules"),
         ("max_examples", 25000, "Invalid max_examples"),
         ("num_train_epochs", 3, "Invalid num_train_epochs"),
-        ("learning_rate", 0.001, "Invalid learning_rate"),
+        ("learning_rate", 0.5, "Invalid learning_rate"),
         ("lr_scheduler_type", "linear", "Invalid lr_scheduler_type"),
         ("warmup_ratio", 0.1, "Invalid warmup_ratio"),
         ("max_seq_length", 512, "Invalid max_seq_length"),
@@ -190,6 +190,27 @@ def test_load_sft_config_validations(
 
     with pytest.raises(ValueError, match=error_match):
         load_sft_config(temp_file)
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "Qwen/Qwen3.5-0.8B",
+        "Qwen/Qwen3.5-2B",
+        "Qwen/Qwen3.5-4B",
+        "Qwen/Qwen3.5-9B",
+    ],
+)
+def test_load_sft_config_allowed_base_models(tmp_path: Path, model_name: str) -> None:
+    """Test loading configuration with each allowed base model."""
+    config_file = Path("training/configs/second-1.0-2b.yaml")
+    content = config_file.read_text(encoding="utf-8")
+    content = content.replace('base_model: "Qwen/Qwen3.5-2B"', f'base_model: "{model_name}"')
+    temp_file = tmp_path / "model_test.yaml"
+    temp_file.write_text(content, encoding="utf-8")
+
+    params = load_sft_config(temp_file)
+    assert params.base_model == model_name
 
 
 def test_build_non_thinking_chat_prompt() -> None:
@@ -337,20 +358,20 @@ def test_answer_only_data_collator() -> None:
 def test_resolve_text_linear_modules() -> None:
     """Test resolving linear leaf modules and excluding non-text layers."""
     named_modules = [
-        ("model.layers.0.self_attn.q_proj", DummyLinear()),
-        ("model.layers.0.self_attn.k_proj", DummyLinear()),
-        ("model.layers.0.self_attn.v_proj", DummyLinear()),
-        ("model.layers.0.self_attn.o_proj", DummyLinear()),
-        ("model.layers.0.mlp.gate_proj", DummyLinear()),
-        ("model.layers.0.mlp.up_proj", DummyLinear()),
-        ("model.layers.0.mlp.down_proj", DummyLinear()),
+        ("model.layers.0.self_attn.q_proj", Linear()),
+        ("model.layers.0.self_attn.k_proj", Linear()),
+        ("model.layers.0.self_attn.v_proj", Linear()),
+        ("model.layers.0.self_attn.o_proj", Linear()),
+        ("model.layers.0.mlp.gate_proj", Linear()),
+        ("model.layers.0.mlp.up_proj", Linear()),
+        ("model.layers.0.mlp.down_proj", Linear()),
         # Gated DeltaNet linear projections
-        ("model.layers.1.linear_attn.in_proj", DummyLinear()),
-        ("model.layers.1.linear_attn.out_proj", DummyLinear()),
+        ("model.layers.1.linear_attn.in_proj", Linear()),
+        ("model.layers.1.linear_attn.out_proj", Linear()),
         # Excluded modules
-        ("lm_head", DummyLinear()),
-        ("visual.patch_embed.proj", DummyLinear()),
-        ("vision_tower.encoder.linear", DummyLinear()),
+        ("lm_head", Linear()),
+        ("visual.patch_embed.proj", Linear()),
+        ("vision_tower.encoder.linear", Linear()),
         ("model.embed_tokens", DummyEmbedding()),
     ]
 

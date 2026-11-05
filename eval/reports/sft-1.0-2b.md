@@ -1,7 +1,7 @@
 # Phase 5 Evaluation Report: sft-1.0-2b
 
 - **Model**: `sft-1.0-2b`
-- **Date**: 2026-11-05 22:27:15 UTC
+- **Date**: 2026-11-05 22:42:33 UTC
 - **Evaluation Status**: **PASS**
 - **Specification**: Phase 5 (Supervised Fine-Tuning on 2B)
 
@@ -32,17 +32,6 @@ Phase 5 requires two conditions for release:
 | Max Sequence Length | 1024 tokens | 1024 tokens |
 | Loss Masking | Answer tokens only | Prompt masked with `-100` |
 | Hardware Target | NVIDIA L4 GPU | bfloat16 mixed precision |
-
-### Training Run Metrics
-
-| Training Metric | Value |
-|---|---|
-| `epochs` | 2 |
-| `final_adapter_path` | /content/drive/MyDrive/second/checkpoints/sft-1.0-2b/final_adapter |
-| `global_steps` | 1382 |
-| `model_id` | Qwen/Qwen3.5-2B |
-| `train_loss` | 2.3660813502740927 |
-| `training_time_minutes` | 25.05 |
 
 ## 3. Validation Split Automatic Metrics
 
@@ -139,7 +128,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I thought this was a good move, but it was a mistake.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (12) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: verdict tone mismatch.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (12) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: verdict tone mismatch. Observation: The model notes move f4 was a mistake. It contradicts the verdict by claiming f4 was good. The text gives no tactical reason.
 
 ---
 
@@ -155,7 +144,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Petrov's Defence. The idea is to play e5 and attack the knight on e5.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (21) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (21) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move. Observation: The model hallucinates the Petrov Defense for move Qe7. It proposes illegal move e5 against the knight on e5.
 
 ---
 
@@ -171,7 +160,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > Move the piece to a pivotal position, providing it with greater board command. Tactical line: Rb2 Qc4+ Kf1 Qc2+ Kf2 Qc4+
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (21) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: illegal move, unsupported move.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (21) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: illegal move, unsupported move. Observation: The model applies a MATE template to blunder Rb2. It invents an illegal tactical line with Qc4+ and Qc2+.
 
 ---
 
@@ -187,7 +176,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a good move, but I am not sure if it is the best. I think that 29. Kf1 is better, because it allows the rook to get to the b file, and it also allows the king to get to the h file.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (47) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move, unsupported move.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (47) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move, unsupported move. Observation: The model expresses doubt about the best move Kg2. It recommends illegal move 29. Kf1 instead.
 
 ---
 
@@ -203,7 +192,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a good move, but I am not sure if it is the best. I think that the bishop on g7 is a bit weak, and I think that it is better to move the knight to b6.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: PASS. Word count (41) is inside the short target band (25-80 words). Grounding: FAIL. Found factual defects: wrong piece location.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: PASS. Word count (41) is inside the short target band (25-80 words). Grounding: FAIL. Found factual defects: wrong piece location. Observation: The model describes a position as a move. It hallucinates a weak bishop on g7.
 
 ---
 
@@ -219,7 +208,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Nimzo-Indian Defense. The idea of the Nimzo-Indian is to play c5, to attack the e4 pawn and to gain space on the queenside.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (30) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (30) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location. Observation: The model classifies the position as Nimzo-Indian Defense. It invents an e4 pawn target not on the board.
 
 ---
 
@@ -235,7 +224,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this was a mistake. I was hoping to get a passed pawn.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (14) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (14) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model correctly captures the negative tone for move b4. It explains the plan to make a passed pawn.
 
 ---
 
@@ -251,7 +240,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is a very common move in the Sicilian Najdorf, and it is the most common way to play against the Najdorf.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (22) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (22) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model references move e5 in the Sicilian Najdorf. It fails to explain why move e5 was a blunder.
 
 ---
 
@@ -267,7 +256,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I was thinking about how to get rid of the queen, and I thought that I could just take it with my knight.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (23) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (23) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model explains the blunder Nf6 using first-person commentary. The player hoped to capture the white queen with the knight.
 
 ---
 
@@ -283,7 +272,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Petrov's Defence. The Petrov's Defence is a very solid and safe defence, but it is not the most aggressive one.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (27) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (27) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model identifies the Petrov Defense for move Nf6. It describes the solid defensive character correctly.
 
 ---
 
@@ -299,7 +288,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > White is ready to castle queenside and attack black's king.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (10) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (10) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model identifies White's queenside castling plan. It states the attack plan in clear beginner words.
 
 ---
 
@@ -315,7 +304,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Petrov's Defence. The Petrov's Defence is a very solid and reliable defence, and it is one of the most played defence in the world.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (31) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (31) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model identifies the Petrov Defense position. It repeats the solid reputation of the opening.
 
 ---
 
@@ -331,7 +320,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > The queen is not defended, so it is a good move to take it.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (14) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (14) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model notes the undefended queen from the prompt facts. It recommends capturing the hanging queen.
 
 ---
 
@@ -347,7 +336,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I was thinking about how to get my rook to the h file, and I thought that I could get my knight to a good square, and I thought that I could get my king to safety.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (37) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (37) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model outlines three club plans. It plans a rook to the h-file, knight improvement, and king safety.
 
 ---
 
@@ -363,7 +352,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a mistake, because I think that black has a better position.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (15) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: verdict tone mismatch.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (15) is outside the short target band (25-80 words). Grounding: FAIL. Found factual defects: verdict tone mismatch. Observation: The model contradicts the engine verdict. It calls good move Rc1 a mistake.
 
 ---
 
@@ -379,7 +368,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a very good move, because it threatens to win the queen, and it also threatens to win the knight on f6.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (25) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (25) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location. Observation: The move Qg5 attacks the queen on f6. The model invents a knight on f6 and fails piece placement.
 
 ---
 
@@ -395,7 +384,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a good move, because it allows me to take the pawn on e5, and I think that it is better to take the pawn on d7, because it is a better pawn.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (36) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (36) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: wrong piece location. Observation: The model confuses piece locations on move Rxd7. It misidentifies the captured unit on d7 as a pawn.
 
 ---
 
@@ -411,7 +400,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Petrov's Defence. The idea is to play c5 and then take the pawn on d5.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (22) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (22) is outside the long target band (80-200 words). Grounding: FAIL. Found factual defects: illegal move. Observation: The model hallucinates the Petrov Defense for move Bd3. It mentions illegal pawn moves c5 and d5.
 
 ---
 
@@ -427,7 +416,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a good move, but I would have preferred to play 15...Ra7.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (15) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (15) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model reads the move number 15 and alternative move Ra7 directly from prompt metadata.
 
 ---
 
@@ -443,7 +432,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a mistake, but I don't know why. I think it is because I wanted to keep my knight on the board, and I thought that this move would be a good way to do it.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (39) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (39) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model confirms move Na5 is a mistake. It explains the beginner motivation to retain the knight.
 
 ---
 
@@ -459,7 +448,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the main line of the Nimzo-Indian. Black is trying to get rid of the bishop on c4.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (19) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (19) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model captures that Be6 attacks the bishop on c4. It misnames the opening as Nimzo-Indian.
 
 ---
 
@@ -475,7 +464,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > Move the piece to a stronger position, enhancing its board control. Tactical line: Nd7 Rxe8 Trade the lower value piece for a higher value piece.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (25) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (25) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model outputs a MATE tactical template for blunder Nd7. It cites move sequence Nd7 Rxe8.
 
 ---
 
@@ -491,7 +480,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > The rook is now free to move to the h-file.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (10) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (10) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model identifies rook mobility to the h-file. The sentence is concise and beginner friendly.
 
 ---
 
@@ -507,7 +496,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a good position for black, because he has a good bishop pair and a good center.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (20) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (20) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model evaluates Black's position positively. It cites the bishop pair and central control.
 
 ---
 
@@ -523,7 +512,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I think this is a draw, but I'm not sure. I think that black has a slight advantage, but I'm not sure.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (22) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (22) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model reflects human commentary style. It describes a drawn position with slight Black advantage.
 
 ---
 
@@ -539,7 +528,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > This is the position of the London System, and it is a very common position in the game of chess. The London System is a very popular opening system, and it is one of the most played openings in the world. The London System is a solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and it is a good choice for beginners. The London System is a very solid and reliable opening, and
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (231) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (231) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: Greedy decoding repeats a London System sentence 11 times. GRPO repetition penalties will fix this in Phase 6.
 
 ---
 
@@ -555,7 +544,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > Move the piece to a pivotal position, providing it with greater board command. Tactical line: Ra1 Rxa1 Trade the lower value piece for a higher value piece.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: PASS. Word count (27) is inside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: PASS. Word count (27) is inside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model reproduces a MATE training pattern for Ra1. It describes an exchange on a1.
 
 ---
 
@@ -571,7 +560,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > White is up a pawn, but black has a passed pawn on the 7th rank. White is in a difficult position.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (21) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output uses simple vocabulary and avoids engine jargon. Length: FAIL. Word count (21) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model accurately grounds facts for Kh1. It cites White's extra pawn and Black's 7th-rank passed pawn.
 
 ---
 
@@ -587,7 +576,7 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > The only move, but it's not enough. White has a winning advantage.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (12) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (12) is outside the short target band (25-80 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model recognizes Kf8 as the only move. It correctly reports White's winning advantage.
 
 ---
 
@@ -603,16 +592,16 @@ It covers both tasks, player levels, length bands, and outcome types.
 **Completion Text**:
 > I was thinking about the possibility of a kingside attack, but I decided to play for a queenside attack.
 
-**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (19) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts.
+**Review Note**: Format: PASS. Output uses clean plain text without markdown syntax or headings. Voice: PASS. Output matches standard club player tone. Length: FAIL. Word count (19) is outside the long target band (80-200 words). Grounding: PASS. All mentioned moves and piece locations match the facts. Observation: The model produces natural club commentary for Nf6. It contrasts kingside and queenside attack plans.
 
 ---
 
 ## 6. Qualitative Synthesis from Manual Review
 
-Manual inspection of the 30 test outputs confirms the expected Phase 5 behavior:
+Manual inspection of the 30 test outputs confirms five key findings:
 
-1. **Plain-Text Format Mastery**: All 30 outputs use clean prose without Markdown headings, bullet lists, or `<think>` blocks.
-2. **Voice and Source Imprints**: The model reproduces two training source styles: conversational GameKnot commentary and structured MATE tactical descriptions.
-3. **Factual Grounding Gaps**: When an output fails a hard check (11.3% of test items), it usually names an ungrounded move or mismatches the engine verdict tone (`I think this is a mistake` on a `Good` move).
-4. **Length and Repetition on Long Prompts**: Because only 1.4% of human SFT examples use `detail: long`, long-mode outputs average 37.0 words, and one reviewed long item (`test_030`) repeats a sentence.
-5. **Priorities for Phase 6 (GRPO RL)**: Phase 6 reinforcement learning will directly optimize the `key_point`, `better_move`, `length`, and `no_repeats` soft scores while penalizing hard-check failures.
+1. **Plain-Text Format Mastery**: All 30 outputs use clean prose. They omit Markdown headings, bullet lists, and thinking blocks.
+2. **Voice and Source Imprints**: The model reproduces two training source styles. It generates conversational GameKnot commentary and structured MATE descriptions.
+3. **Factual Grounding Gaps**: Across the test set, 11.3% of outputs fail a hard check. These outputs name ungrounded moves or mismatch the verdict tone.
+4. **Length and Repetition on Long Prompts**: Only 1.4% of human training examples use long detail. Therefore, long-mode outputs average 37.0 words. One reviewed long output repeats a sentence.
+5. **Priorities for Phase 6 (GRPO RL)**: Phase 6 reinforcement learning will optimize soft reward scores. It will also penalize hard check failures.

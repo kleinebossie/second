@@ -522,7 +522,7 @@ def test_run_eval_end_to_end_with_rule_backend(tmp_path: Path) -> None:
 
 
 def test_transformers_baseline_generator_passes_enable_thinking_false() -> None:
-    """Verify that generate passes enable_thinking=False when supported."""
+    """When supported, pass enable_thinking=False in TransformersBaselineGenerator."""
     mock_torch = MagicMock()
     mock_transformers = MagicMock()
     mock_tokenizer = MagicMock()
@@ -551,7 +551,7 @@ def test_transformers_baseline_generator_passes_enable_thinking_false() -> None:
 
 
 def test_transformers_baseline_generator_fallback_when_enable_thinking_raises_type_error() -> None:
-    """Verify fallback when tokenizer does not accept enable_thinking."""
+    """When enable_thinking is unsupported, fall back in TransformersBaselineGenerator."""
     mock_torch = MagicMock()
     mock_transformers = MagicMock()
     mock_tokenizer = MagicMock()
@@ -583,7 +583,7 @@ def test_transformers_baseline_generator_fallback_when_enable_thinking_raises_ty
 
 
 def test_transformers_baseline_generator_loads_peft_adapter(tmp_path: Path) -> None:
-    """Verify loading from PEFT adapter checkpoint when adapter_config.json exists."""
+    """When adapter_config.json exists, load the PEFT adapter."""
     adapter_dir = tmp_path / "adapter_ckpt"
     adapter_dir.mkdir()
     config_file = adapter_dir / "adapter_config.json"

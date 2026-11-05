@@ -294,33 +294,32 @@ class TransformersBaselineGenerator:
                 self.tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, trust_remote_code=True)
 
             LOGGER.info("Loading base model from %s for adapter %s on %s", base_model_name_or_path, model_path, self.device)
-            base_model = AutoModelForCausalLM.from_pretrained(
-                base_model_name_or_path,
-                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True,
-            )
+            base_model = self._load_causal_lm(base_model_name_or_path, torch, AutoModelForCausalLM)
             self.model = peft.PeftModel.from_pretrained(base_model, model_path)
         else:
             LOGGER.info("Loading tokenizer from %s", model_path)
             self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             LOGGER.info("Loading model from %s on %s", model_path, self.device)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True,
-            )
+            self.model = self._load_causal_lm(model_path, torch, AutoModelForCausalLM)
 
         if self.device != "cuda":
             self.model.to(self.device)
         self.model.eval()
 
+    def _load_causal_lm(self, path: str, torch_mod: Any, model_cls: Any) -> Any:
+        """When called, load a causal language model with standard settings."""
+        return model_cls.from_pretrained(
+            path,
+            torch_dtype=torch_mod.bfloat16 if self.device == "cuda" else torch_mod.float32,
+            device_map="auto" if self.device == "cuda" else None,
+            trust_remote_code=True,
+        )
+
     def generate(self, prompt_text: str, item: dict[str, Any]) -> str:
         """Generate greedy completion with Hugging Face model.
 
         Format prompt into chat messages and decode tokens.
-        Disable thinking mode when the tokenizer supports it.
+        When the tokenizer supports it, disable thinking mode.
         Return the generated completion text.
         """
         import torch

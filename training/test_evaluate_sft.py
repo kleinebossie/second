@@ -17,6 +17,8 @@ import pytest
 
 from eval.metrics import AggregateMetrics, EvalMetrics, ItemMetric
 from training.evaluate_sft import (
+    MANUAL_REVIEW_NOTES,
+    Phase5EvalContext,
     Phase5PassResult,
     check_phase5_pass_rule,
     create_structured_review_note,
@@ -341,6 +343,57 @@ def test_generate_phase5_report() -> None:
     assert "## 5. Manual Review of 30 Outputs" in report
     assert "sample_001" in report
     assert "Format Pass Rate" in report
+
+
+def test_generate_phase5_report_with_context() -> None:
+    """Verify report generation when using Phase5EvalContext dataclass."""
+    val_metrics = EvalMetrics(aggregate=_make_dummy_aggregate(total=137), items=[])
+    test_metrics = EvalMetrics(aggregate=_make_dummy_aggregate(total=300), items=[])
+    base_metrics = EvalMetrics(aggregate=_make_dummy_aggregate(total=300, hard_fail_rate=100.0), items=[])
+    pass_result = check_phase5_pass_rule(test_metrics, base_metrics)
+
+    context = Phase5EvalContext(
+        model_name="sft-ctx-test",
+        val_metrics=val_metrics,
+        test_metrics=test_metrics,
+        base_qwen_metrics=base_metrics,
+        pass_result=pass_result,
+        reviewed_30=[],
+        training_metadata={"epochs": 2},
+    )
+
+    report = generate_phase5_report(context)
+    assert "# Phase 5 Evaluation Report: sft-ctx-test" in report
+    assert "## 1. Executive Summary and Pass Rule Verification" in report
+
+
+def test_create_structured_review_note_manual_observation() -> None:
+    """Verify that structured review notes include specific human observations."""
+    item = _make_dummy_item("test_008", task="explain_move", level="beginner", detail="short")
+    note = create_structured_review_note(item)
+
+    assert "Observation:" in note
+    assert "reads the move number 15 and alternative move Ra7" in note
+
+
+def test_run_phase5_evaluation_raises_when_baseline_missing(tmp_path: Path) -> None:
+    """Verify that run_phase5_evaluation raises FileNotFoundError when baseline is missing."""
+    val_file = tmp_path / "val.jsonl"
+    test_file = tmp_path / "test.jsonl"
+    missing_base_file = tmp_path / "nonexistent_baseline.jsonl"
+
+    record = {"id": "dummy_1", "task": "explain_move", "prompt": "FEN: 8/8/8/8/8/8/8/8 w - - 0 1", "completion": "Move."}
+    val_file.write_text(json.dumps(record) + "\n", encoding="utf-8")
+    test_file.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="Base Qwen baseline file not found"):
+        run_phase5_evaluation(
+            val_outputs_path=val_file,
+            test_outputs_path=test_file,
+            base_qwen_path=missing_base_file,
+            results_dir=tmp_path / "res",
+            reports_dir=tmp_path / "rep",
+        )
 
 
 def test_run_phase5_evaluation_end_to_end(tmp_path: Path) -> None:

@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+import yaml
+
 DEFAULT_SYSTEM_MESSAGE: str = (
     "You are Second, a chess assistant. "
     "You explain chess positions and moves clearly using the provided facts."
@@ -30,6 +32,13 @@ DEFAULT_FALLBACK_LINEAR_MODULES: list[str] = [
     "up_proj",
     "down_proj",
 ]
+
+ALLOWED_BASE_MODELS: set[str] = {
+    "Qwen/Qwen3.5-0.8B",
+    "Qwen/Qwen3.5-2B",
+    "Qwen/Qwen3.5-4B",
+    "Qwen/Qwen3.5-9B",
+}
 
 
 @dataclass
@@ -82,70 +91,13 @@ class SFTConfigParams:
         return self.raw_config.get("mode", {})
 
 
-def _parse_yaml_scalar(val: str) -> Any:
-    """Parse scalar YAML value."""
-    val = val.strip()
-    if val.startswith('"') and val.endswith('"'):
-        return val[1:-1]
-    if val.startswith("'") and val.endswith("'"):
-        return val[1:-1]
-    if val.lower() == "true":
-        return True
-    if val.lower() == "false":
-        return False
-    if val.lower() in ("null", "none"):
-        return None
-    try:
-        if "." in val or "e" in val.lower():
-            return float(val)
-        return int(val)
-    except ValueError:
-        return val
-
-
-def _parse_simple_yaml(text: str) -> dict[str, Any]:
-    """Parse simple nested YAML without external dependencies."""
-    result: dict[str, Any] = {}
-    current_section: dict[str, Any] | None = None
-
-    for line in text.splitlines():
-        line = line.rstrip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("  ") and current_section is not None:
-            subline = line.strip()
-            if ":" in subline:
-                k, v = subline.split(":", 1)
-                current_section[k.strip()] = _parse_yaml_scalar(v)
-            continue
-
-        current_section = None
-        if ":" in line:
-            k, v = line.split(":", 1)
-            k = k.strip()
-            v = v.strip()
-            if not v:
-                sub_dict: dict[str, Any] = {}
-                result[k] = sub_dict
-                current_section = sub_dict
-            else:
-                result[k] = _parse_yaml_scalar(v)
-
-    return result
-
-
 def _read_yaml_file(path: Path) -> dict[str, Any]:
     """Read and parse a YAML file."""
     content = path.read_text(encoding="utf-8")
-    try:
-        import yaml
-
-        loaded = yaml.safe_load(content)
-        if isinstance(loaded, dict):
-            return loaded
-        return {}
-    except ImportError:
-        return _parse_simple_yaml(content)
+    loaded = yaml.safe_load(content)
+    if isinstance(loaded, dict):
+        return loaded
+    return {}
 
 
 def load_sft_config(
@@ -181,9 +133,9 @@ def load_sft_config(
     loss_on_answer_only = sft.get("loss_on_answer_only")
     save_steps = sft.get("save_steps")
 
-    if base_model != "Qwen/Qwen3.5-2B":
+    if base_model not in ALLOWED_BASE_MODELS:
         raise ValueError(
-            f"Invalid base_model: expected 'Qwen/Qwen3.5-2B', got '{base_model}'"
+            f"Invalid base_model: expected one of {sorted(ALLOWED_BASE_MODELS)}, got '{base_model}'"
         )
     if text_only is not True:
         raise ValueError(f"Invalid text_only: expected True, got {text_only}")
@@ -191,10 +143,10 @@ def load_sft_config(
         raise ValueError(
             f"Invalid enable_thinking: expected False, got {enable_thinking}"
         )
-    if lora_r != 32:
-        raise ValueError(f"Invalid lora_r: expected 32, got {lora_r}")
-    if lora_alpha != 32:
-        raise ValueError(f"Invalid lora_alpha: expected 32, got {lora_alpha}")
+    if not isinstance(lora_r, int) or lora_r <= 0:
+        raise ValueError(f"Invalid lora_r: expected positive integer, got {lora_r}")
+    if not isinstance(lora_alpha, int) or lora_alpha <= 0:
+        raise ValueError(f"Invalid lora_alpha: expected positive integer, got {lora_alpha}")
     if target_modules != "all-linear":
         raise ValueError(
             f"Invalid target_modules: expected 'all-linear', got '{target_modules}'"
@@ -207,9 +159,9 @@ def load_sft_config(
         raise ValueError(
             f"Invalid num_train_epochs: expected 1 or 2, got {num_train_epochs}"
         )
-    if learning_rate is None or abs(float(learning_rate) - 1e-4) > 1e-9:
+    if learning_rate is None or not (0 < float(learning_rate) <= 0.01):
         raise ValueError(
-            f"Invalid learning_rate: expected 0.0001 (1e-4), got {learning_rate}"
+            f"Invalid learning_rate: expected 0 < learning_rate <= 0.01, got {learning_rate}"
         )
     if lr_scheduler_type != "cosine":
         raise ValueError(
@@ -479,7 +431,6 @@ def resolve_text_linear_modules(
             "Linear",
             "Linear4bit",
             "Linear8bitLt",
-            "DummyLinear",
         }
 
         if not is_linear:

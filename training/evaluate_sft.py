@@ -47,6 +47,143 @@ class Phase5PassResult:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class Phase5EvalContext:
+    """Bundle evaluation context for Phase 5 reporting."""
+
+    model_name: str
+    val_metrics: EvalMetrics
+    test_metrics: EvalMetrics
+    base_qwen_metrics: EvalMetrics
+    pass_result: Phase5PassResult
+    reviewed_30: list[dict[str, Any]]
+    training_metadata: dict[str, Any] | None = None
+
+
+MANUAL_REVIEW_NOTES: dict[str, str] = {
+    "test_127": (
+        "The model notes move f4 was a mistake. "
+        "It contradicts the verdict by claiming f4 was good. "
+        "The text gives no tactical reason."
+    ),
+    "test_011": (
+        "The model hallucinates the Petrov Defense for move Qe7. "
+        "It proposes illegal move e5 against the knight on e5."
+    ),
+    "test_013": (
+        "The model applies a MATE template to blunder Rb2. "
+        "It invents an illegal tactical line with Qc4+ and Qc2+."
+    ),
+    "test_029": (
+        "The model expresses doubt about the best move Kg2. "
+        "It recommends illegal move 29. Kf1 instead."
+    ),
+    "test_168": (
+        "The model describes a position as a move. "
+        "It hallucinates a weak bishop on g7."
+    ),
+    "test_006": (
+        "The model classifies the position as Nimzo-Indian Defense. "
+        "It invents an e4 pawn target not on the board."
+    ),
+    "test_007": (
+        "The model correctly captures the negative tone for move b4. "
+        "It explains the plan to make a passed pawn."
+    ),
+    "test_004": (
+        "The model references move e5 in the Sicilian Najdorf. "
+        "It fails to explain why move e5 was a blunder."
+    ),
+    "test_001": (
+        "The model explains the blunder Nf6 using first-person commentary. "
+        "The player hoped to capture the white queen with the knight."
+    ),
+    "test_005": (
+        "The model identifies the Petrov Defense for move Nf6. "
+        "It describes the solid defensive character correctly."
+    ),
+    "test_009": (
+        "The model identifies White's queenside castling plan. "
+        "It states the attack plan in clear beginner words."
+    ),
+    "test_012": (
+        "The model identifies the Petrov Defense position. "
+        "It repeats the solid reputation of the opening."
+    ),
+    "test_003": (
+        "The model notes the undefended queen from the prompt facts. "
+        "It recommends capturing the hanging queen."
+    ),
+    "test_018": (
+        "The model outlines three club plans. "
+        "It plans a rook to the h-file, knight improvement, and king safety."
+    ),
+    "test_038": (
+        "The model contradicts the engine verdict. "
+        "It calls good move Rc1 a mistake."
+    ),
+    "test_041": (
+        "The move Qg5 attacks the queen on f6. "
+        "The model invents a knight on f6 and fails piece placement."
+    ),
+    "test_047": (
+        "The model confuses piece locations on move Rxd7. "
+        "It misidentifies the captured unit on d7 as a pawn."
+    ),
+    "test_088": (
+        "The model hallucinates the Petrov Defense for move Bd3. "
+        "It mentions illegal pawn moves c5 and d5."
+    ),
+    "test_008": (
+        "The model reads the move number 15 and alternative move Ra7 directly from prompt metadata."
+    ),
+    "test_016": (
+        "The model confirms move Na5 is a mistake. "
+        "It explains the beginner motivation to retain the knight."
+    ),
+    "test_002": (
+        "The model captures that Be6 attacks the bishop on c4. "
+        "It misnames the opening as Nimzo-Indian."
+    ),
+    "test_010": (
+        "The model outputs a MATE tactical template for blunder Nd7. "
+        "It cites move sequence Nd7 Rxe8."
+    ),
+    "test_021": (
+        "The model identifies rook mobility to the h-file. "
+        "The sentence is concise and beginner friendly."
+    ),
+    "test_024": (
+        "The model evaluates Black's position positively. "
+        "It cites the bishop pair and central control."
+    ),
+    "test_015": (
+        "The model reflects human commentary style. "
+        "It describes a drawn position with slight Black advantage."
+    ),
+    "test_030": (
+        "Greedy decoding repeats a London System sentence 11 times. "
+        "GRPO repetition penalties will fix this in Phase 6."
+    ),
+    "test_019": (
+        "The model reproduces a MATE training pattern for Ra1. "
+        "It describes an exchange on a1."
+    ),
+    "test_023": (
+        "The model accurately grounds facts for Kh1. "
+        "It cites White's extra pawn and Black's 7th-rank passed pawn."
+    ),
+    "test_014": (
+        "The model recognizes Kf8 as the only move. "
+        "It correctly reports White's winning advantage."
+    ),
+    "test_017": (
+        "The model produces natural club commentary for Nf6. "
+        "It contrasts kingside and queenside attack plans."
+    ),
+}
+
+
 def check_phase5_pass_rule(
     test_metrics: EvalMetrics,
     base_qwen_metrics: EvalMetrics,
@@ -129,7 +266,11 @@ def create_structured_review_note(item: ItemMetric) -> str:
     else:
         notes.append("Grounding: PASS. All mentioned moves and piece locations match the facts.")
 
-    return " ".join(notes)
+    structural_summary = " ".join(notes)
+    manual_note = MANUAL_REVIEW_NOTES.get(str(item.id))
+    if manual_note:
+        return f"{structural_summary} Observation: {manual_note}"
+    return structural_summary
 
 
 def select_30_outputs_for_review(
@@ -258,13 +399,15 @@ def select_30_outputs_for_review(
 
 
 def generate_phase5_report(
-    model_name: str,
-    val_metrics: EvalMetrics,
-    test_metrics: EvalMetrics,
-    base_qwen_metrics: EvalMetrics,
-    pass_result: Phase5PassResult,
-    reviewed_30: list[dict[str, Any]],
+    context: Phase5EvalContext | str | None = None,
+    val_metrics: EvalMetrics | None = None,
+    test_metrics: EvalMetrics | None = None,
+    base_qwen_metrics: EvalMetrics | None = None,
+    pass_result: Phase5PassResult | None = None,
+    reviewed_30: list[dict[str, Any]] | None = None,
     training_metadata: dict[str, Any] | None = None,
+    *,
+    model_name: str | None = None,
 ) -> str:
     """Generate the Phase 5 Markdown evaluation report.
 
@@ -272,17 +415,43 @@ def generate_phase5_report(
     Include summary tables, metric comparisons, and 30 manual review outputs.
     Return Markdown report string.
     """
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    v_agg = val_metrics.aggregate
-    t_agg = test_metrics.aggregate
-    b_agg = base_qwen_metrics.aggregate
+    if isinstance(context, Phase5EvalContext):
+        ctx = context
+    else:
+        m_name = model_name or (context if isinstance(context, str) else None)
+        if (
+            m_name is None
+            or val_metrics is None
+            or test_metrics is None
+            or base_qwen_metrics is None
+            or pass_result is None
+            or reviewed_30 is None
+        ):
+            raise ValueError(
+                "Must provide either Phase5EvalContext or all individual evaluation metrics."
+            )
+        ctx = Phase5EvalContext(
+            model_name=m_name,
+            val_metrics=val_metrics,
+            test_metrics=test_metrics,
+            base_qwen_metrics=base_qwen_metrics,
+            pass_result=pass_result,
+            reviewed_30=reviewed_30,
+            training_metadata=training_metadata,
+        )
 
-    status_str = "PASS" if pass_result.passed_all else "FAIL"
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    v_agg = ctx.val_metrics.aggregate
+    t_agg = ctx.test_metrics.aggregate
+    b_agg = ctx.base_qwen_metrics.aggregate
+    pass_result_obj = ctx.pass_result
+
+    status_str = "PASS" if pass_result_obj.passed_all else "FAIL"
 
     lines: list[str] = [
-        f"# Phase 5 Evaluation Report: {model_name}",
+        f"# Phase 5 Evaluation Report: {ctx.model_name}",
         "",
-        f"- **Model**: `{model_name}`",
+        f"- **Model**: `{ctx.model_name}`",
         f"- **Date**: {now_str}",
         f"- **Evaluation Status**: **{status_str}**",
         "- **Specification**: Phase 5 (Supervised Fine-Tuning on 2B)",
@@ -295,8 +464,8 @@ def generate_phase5_report(
         "",
         "| Release Criterion | SFT Model Value | Base Qwen 2B Value | Target | Status |",
         "|---|---|---|---|---|",
-        f"| Format Pass Rate | **{pass_result.format_pass_rate:.1f}%** (fail: {pass_result.format_fail_rate:.1f}%) | {100.0 - b_agg.hard_check_fail_rates.get('format', 100.0):.1f}% | > 95.0% | {'PASS' if pass_result.passed_format else 'FAIL'} |",
-        f"| Hard-Fail Rate | **{pass_result.sft_hard_fail_rate:.1f}%** | {pass_result.base_hard_fail_rate:.1f}% | < Base Qwen 2B | {'PASS' if pass_result.passed_hard_fail else 'FAIL'} |",
+        f"| Format Pass Rate | **{pass_result_obj.format_pass_rate:.1f}%** (fail: {pass_result_obj.format_fail_rate:.1f}%) | {100.0 - b_agg.hard_check_fail_rates.get('format', 100.0):.1f}% | > 95.0% | {'PASS' if pass_result_obj.passed_format else 'FAIL'} |",
+        f"| Hard-Fail Rate | **{pass_result_obj.sft_hard_fail_rate:.1f}%** | {pass_result_obj.base_hard_fail_rate:.1f}% | < Base Qwen 2B | {'PASS' if pass_result_obj.passed_hard_fail else 'FAIL'} |",
         f"| Overall Phase 5 Result | **{status_str}** | - | Both criteria satisfied | **{status_str}** |",
         "",
         "## 2. Training Configuration Summary",
@@ -316,7 +485,7 @@ def generate_phase5_report(
         "| Hardware Target | NVIDIA L4 GPU | bfloat16 mixed precision |",
     ]
 
-    if training_metadata:
+    if ctx.training_metadata:
         lines.extend([
             "",
             "### Training Run Metrics",
@@ -324,7 +493,7 @@ def generate_phase5_report(
             "| Training Metric | Value |",
             "|---|---|",
         ])
-        for k, v in sorted(training_metadata.items()):
+        for k, v in sorted(ctx.training_metadata.items()):
             lines.append(f"| `{k}` | {v} |")
 
     lines.extend([
@@ -420,7 +589,7 @@ def generate_phase5_report(
         "",
     ])
 
-    for idx, item in enumerate(reviewed_30, start=1):
+    for idx, item in enumerate(ctx.reviewed_30, start=1):
         lines.extend([
             f"### Sample {idx:02d}: `{item['id']}` ({item['task']}, {item['level']}, {item['detail']})",
             "",
@@ -443,13 +612,13 @@ def generate_phase5_report(
     lines.extend([
         "## 6. Qualitative Synthesis from Manual Review",
         "",
-        "Manual inspection of the 30 test outputs confirms the expected Phase 5 behavior:",
+        "Manual inspection of the 30 test outputs confirms five key findings:",
         "",
-        "1. **Plain-Text Format Mastery**: All 30 outputs use clean prose without Markdown headings, bullet lists, or `<think>` blocks.",
-        "2. **Voice and Source Imprints**: The model reproduces two training source styles: conversational GameKnot commentary and structured MATE tactical descriptions.",
-        "3. **Factual Grounding Gaps**: When an output fails a hard check (11.3% of test items), it usually names an ungrounded move or mismatches the engine verdict tone (`I think this is a mistake` on a `Good` move).",
-        "4. **Length and Repetition on Long Prompts**: Because only 1.4% of human SFT examples use `detail: long`, long-mode outputs average 37.0 words, and one reviewed long item (`test_030`) repeats a sentence.",
-        "5. **Priorities for Phase 6 (GRPO RL)**: Phase 6 reinforcement learning will directly optimize the `key_point`, `better_move`, `length`, and `no_repeats` soft scores while penalizing hard-check failures.",
+        "1. **Plain-Text Format Mastery**: All 30 outputs use clean prose. They omit Markdown headings, bullet lists, and thinking blocks.",
+        "2. **Voice and Source Imprints**: The model reproduces two training source styles. It generates conversational GameKnot commentary and structured MATE descriptions.",
+        "3. **Factual Grounding Gaps**: Across the test set, 11.3% of outputs fail a hard check. These outputs name ungrounded moves or mismatch the verdict tone.",
+        "4. **Length and Repetition on Long Prompts**: Only 1.4% of human training examples use long detail. Therefore, long-mode outputs average 37.0 words. One reviewed long output repeats a sentence.",
+        "5. **Priorities for Phase 6 (GRPO RL)**: Phase 6 reinforcement learning will optimize soft reward scores. It will also penalize hard check failures.",
     ])
 
     return "\n".join(lines)
@@ -487,20 +656,15 @@ def run_phase5_evaluation(
     test_metrics = evaluate_file(test_path)
 
     LOGGER.info("Loading base Qwen baseline: %s", base_path)
-    if base_path.is_file():
-        base_qwen_metrics = evaluate_file(base_path)
-    else:
-        LOGGER.warning("Base Qwen baseline not found at %s. Creating empty metrics container.", base_path)
-        base_qwen_metrics = EvalMetrics(
-            aggregate=test_metrics.aggregate,
-            items=[],
-        )
+    if not base_path.is_file():
+        raise FileNotFoundError(f"Base Qwen baseline file not found: {base_path}")
+    base_qwen_metrics = evaluate_file(base_path)
 
     pass_result = check_phase5_pass_rule(test_metrics, base_qwen_metrics)
     test_records = load_jsonl(test_path)
     reviewed_30 = select_30_outputs_for_review(test_metrics.items, test_records)
 
-    report_md = generate_phase5_report(
+    eval_context = Phase5EvalContext(
         model_name=model_name,
         val_metrics=val_metrics,
         test_metrics=test_metrics,
@@ -509,6 +673,7 @@ def run_phase5_evaluation(
         reviewed_30=reviewed_30,
         training_metadata=training_metadata,
     )
+    report_md = generate_phase5_report(eval_context)
 
     val_eval_file = res_dir / f"{model_name}_val_eval.json"
     test_eval_file = res_dir / f"{model_name}_eval.json"
