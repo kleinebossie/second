@@ -1,0 +1,8 @@
+{
+  "model_id": "Qwen/Qwen3.5-2B",
+  "epochs": 2,
+  "global_steps": 1382,
+  "train_loss": 2.3660813502740927,
+  "training_time_minutes": 25.05,
+  "final_adapter_path": "/content/drive/MyDrive/second/checkpoints/sft-1.0-2b/final_adapter"
+}

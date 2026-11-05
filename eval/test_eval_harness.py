@@ -14,6 +14,7 @@ import pytest
 
 from eval.baselines import (
     RuleBaselineGenerator,
+    TransformersBaselineGenerator,
     create_baseline_generator,
     generate_baseline,
     load_baseline,
@@ -518,3 +519,94 @@ def test_run_eval_end_to_end_with_rule_backend(tmp_path: Path) -> None:
     md_content = (rep_dir / "test_rule_model.md").read_text(encoding="utf-8")
     assert "Evaluation Report: test_rule_model" in md_content
     assert "skipped LLM judge evaluation" in md_content
+
+
+def test_transformers_baseline_generator_passes_enable_thinking_false() -> None:
+    """Verify that generate passes enable_thinking=False when supported."""
+    mock_torch = MagicMock()
+    mock_transformers = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_model = MagicMock()
+
+    mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
+    mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_model
+
+    mock_tokenizer.apply_chat_template.return_value = "formatted prompt"
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "White plays Ng5."
+
+    mock_inputs = {"input_ids": MagicMock(shape=[1, 3])}
+    mock_tokenizer.return_value.to.return_value = mock_inputs
+    mock_model.device = "cpu"
+    mock_model.generate.return_value = [MagicMock()]
+
+    with patch.dict("sys.modules", {"torch": mock_torch, "transformers": mock_transformers}):
+        gen = TransformersBaselineGenerator("dummy-model", device="cpu")
+        output = gen.generate("Sample prompt", {})
+
+        assert output == "White plays Ng5."
+        mock_tokenizer.apply_chat_template.assert_called_once()
+        _, kwargs = mock_tokenizer.apply_chat_template.call_args
+        assert kwargs.get("enable_thinking") is False
+
+
+def test_transformers_baseline_generator_fallback_when_enable_thinking_raises_type_error() -> None:
+    """Verify fallback when tokenizer does not accept enable_thinking."""
+    mock_torch = MagicMock()
+    mock_transformers = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_model = MagicMock()
+
+    mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
+    mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_model
+
+    def side_effect(*args: Any, **kwargs: Any) -> str:
+        if "enable_thinking" in kwargs:
+            raise TypeError("unexpected keyword argument 'enable_thinking'")
+        return "fallback formatted prompt"
+
+    mock_tokenizer.apply_chat_template.side_effect = side_effect
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "White plays Ng5."
+
+    mock_inputs = {"input_ids": MagicMock(shape=[1, 3])}
+    mock_tokenizer.return_value.to.return_value = mock_inputs
+    mock_model.device = "cpu"
+    mock_model.generate.return_value = [MagicMock()]
+
+    with patch.dict("sys.modules", {"torch": mock_torch, "transformers": mock_transformers}):
+        gen = TransformersBaselineGenerator("dummy-model", device="cpu")
+        output = gen.generate("Sample prompt", {})
+
+        assert output == "White plays Ng5."
+        assert mock_tokenizer.apply_chat_template.call_count == 2
+
+
+def test_transformers_baseline_generator_loads_peft_adapter(tmp_path: Path) -> None:
+    """Verify loading from PEFT adapter checkpoint when adapter_config.json exists."""
+    adapter_dir = tmp_path / "adapter_ckpt"
+    adapter_dir.mkdir()
+    config_file = adapter_dir / "adapter_config.json"
+    config_file.write_text(json.dumps({"base_model_name_or_path": "Qwen/Qwen3.5-2B"}), encoding="utf-8")
+
+    mock_torch = MagicMock()
+    mock_transformers = MagicMock()
+    mock_peft = MagicMock()
+
+    mock_base_model = MagicMock()
+    mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_base_model
+    mock_peft_model = MagicMock()
+    mock_peft.PeftModel.from_pretrained.return_value = mock_peft_model
+    mock_transformers.AutoTokenizer.from_pretrained.return_value = MagicMock()
+
+    with patch.dict("sys.modules", {"torch": mock_torch, "transformers": mock_transformers, "peft": mock_peft}):
+        gen = TransformersBaselineGenerator(str(adapter_dir), device="cpu")
+
+        mock_transformers.AutoModelForCausalLM.from_pretrained.assert_called_once_with(
+            "Qwen/Qwen3.5-2B",
+            torch_dtype=mock_torch.float32,
+            device_map=None,
+            trust_remote_code=True,
+        )
+        mock_peft.PeftModel.from_pretrained.assert_called_once_with(mock_base_model, str(adapter_dir))
+        assert gen.model == mock_peft_model

@@ -253,6 +253,8 @@ class TransformersBaselineGenerator:
     ) -> None:
         """Initialize transformers model and tokenizer.
 
+        If model directory contains adapter_config.json, load PEFT adapter weights.
+        Otherwise load full model weights directly.
         Import transformers and torch lazily.
         """
         try:
@@ -268,15 +270,48 @@ class TransformersBaselineGenerator:
         self.max_tokens = max_tokens
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
-        LOGGER.info("Loading tokenizer from %s", model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        LOGGER.info("Loading model from %s on %s", model_path, self.device)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
-            device_map="auto" if self.device == "cuda" else None,
-            trust_remote_code=True,
-        )
+        adapter_config_path = Path(model_path) / "adapter_config.json"
+        if adapter_config_path.is_file():
+            try:
+                import peft
+            except ImportError as exc:
+                raise ImportError(
+                    "Package peft is required to load adapter checkpoints. Install peft."
+                ) from exc
+
+            with open(adapter_config_path, "r", encoding="utf-8") as f:
+                adapter_cfg = json.load(f)
+            base_model_name_or_path = adapter_cfg.get("base_model_name_or_path")
+            if not base_model_name_or_path:
+                raise ValueError(
+                    f"adapter_config.json in {model_path} does not specify base_model_name_or_path"
+                )
+
+            LOGGER.info("Loading tokenizer from %s (fallback to %s)", model_path, base_model_name_or_path)
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            except Exception:
+                self.tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, trust_remote_code=True)
+
+            LOGGER.info("Loading base model from %s for adapter %s on %s", base_model_name_or_path, model_path, self.device)
+            base_model = AutoModelForCausalLM.from_pretrained(
+                base_model_name_or_path,
+                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                device_map="auto" if self.device == "cuda" else None,
+                trust_remote_code=True,
+            )
+            self.model = peft.PeftModel.from_pretrained(base_model, model_path)
+        else:
+            LOGGER.info("Loading tokenizer from %s", model_path)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            LOGGER.info("Loading model from %s on %s", model_path, self.device)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                device_map="auto" if self.device == "cuda" else None,
+                trust_remote_code=True,
+            )
+
         if self.device != "cuda":
             self.model.to(self.device)
         self.model.eval()
@@ -285,6 +320,7 @@ class TransformersBaselineGenerator:
         """Generate greedy completion with Hugging Face model.
 
         Format prompt into chat messages and decode tokens.
+        Disable thinking mode when the tokenizer supports it.
         Return the generated completion text.
         """
         import torch
@@ -294,11 +330,19 @@ class TransformersBaselineGenerator:
             {"role": "user", "content": prompt_text},
         ]
         if hasattr(self.tokenizer, "apply_chat_template"):
-            input_text = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            try:
+                input_text = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                input_text = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
         else:
             input_text = f"System: {SYSTEM_PROMPT}\nUser: {prompt_text}\nAssistant:"
 
