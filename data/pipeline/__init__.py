@@ -17,6 +17,18 @@ from .analyse import (
     analyse_records,
     find_stockfish_binary,
 )
+from .deglue import (
+    count_unknown_tokens,
+    deglue_comment,
+    deglue_token,
+    has_too_many_unknown_tokens,
+    remove_reader_questions,
+)
+from .eval_pool import (
+    build_eval_pool_from_evaluated,
+    generate_eval_pool,
+    save_eval_pool,
+)
 from .filter_comments import (
     FilterStats,
     assign_detail_and_truncate,
@@ -58,6 +70,9 @@ __all__ = [
     "normalize_fen",
     "split_by_game",
     "save_splits",
+    "build_eval_pool_from_evaluated",
+    "generate_eval_pool",
+    "save_eval_pool",
     "build_rl_prompts_from_evaluated",
     "generate_rl_prompts",
     "load_excluded_keys",
@@ -74,4 +89,9 @@ __all__ = [
     "assign_detail_and_truncate",
     "FilterStats",
     "label_level",
+    "deglue_comment",
+    "deglue_token",
+    "remove_reader_questions",
+    "has_too_many_unknown_tokens",
+    "count_unknown_tokens",
 ]

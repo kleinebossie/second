@@ -20,7 +20,8 @@ Every model size uses the same prompt format and training recipe.
 
 The project includes a Manifest V3 browser extension for Lichess.
 The extension runs inside the Chrome side panel.
-It executes the model directly on your local device using WebAssembly.
+It executes the model directly on your local GPU with WebGPU.
+Stockfish runs locally in WebAssembly.
 Your game data stays private.
 The extension sends no positions to external model servers.
 
@@ -60,10 +61,16 @@ second/
 │   ├── configs/             # Training configurations per model size (planned for Phase 5)
 │   ├── sft.ipynb            # Supervised Fine-Tuning notebook (planned for Phase 5)
 │   └── grpo.ipynb           # Group Relative Policy Optimization notebook (planned for Phase 6)
-├── eval/                    # Evaluation tools
-│   ├── rating_space/        # Human evaluation interface (planned for Phase 4)
-│   ├── results/             # Benchmark test results (planned for Phase 4)
-│   └── reports/             # Model release reports (planned for Phase 7)
+├── eval/                    # Evaluation harness and frozen test set (Phase 4)
+│   ├── testset-1.0.jsonl    # Frozen 300-item evaluation set (Phase 4.1)
+│   ├── build_testset.py     # Deterministic test set builder (Phase 4.1)
+│   ├── metrics.py           # Automatic rule and length metrics (Phase 4.2)
+│   ├── judge.py             # Gemini Flash rubric and pairwise judge (Phase 4.3)
+│   ├── baselines.py         # Baseline explanation generator (Phase 4.4)
+│   ├── run_eval.py          # Single-command evaluation harness (Phase 4)
+│   ├── rating_space/        # Human evaluation Gradio Space (Phase 4.5)
+│   ├── results/             # Benchmark test results (Phase 4)
+│   └── reports/             # Model evaluation reports (Phase 4 / Phase 7)
 ├── export/                  # Quantization and browser conversion (planned for Phase 8)
 ├── extension/               # Lichess Chrome extension (GPLv3) (planned for Phase 9)
 │   ├── LICENSE              # GNU General Public License v3.0
@@ -76,6 +83,82 @@ second/
 │   └── colab-stockfish/     # Stockfish benchmark (Phase 0.4)
 └── .github/workflows/       # CI test pipelines (Phase 1)
 ```
+
+## Development
+
+### Virtual Environment Setup
+
+To create a virtual environment and install the development dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+### Running Tests
+
+To run the Python tests from the repository root:
+
+```bash
+pytest core/python data/sources data/pipeline rewards eval
+```
+
+### Evaluation Harness
+
+To run the full Phase 4 evaluation harness on a model checkpoint or pre-generated outputs:
+
+```bash
+python -m eval.run_eval --model-path Qwen/Qwen3.5-2B-Instruct --model-name base-qwen-2b
+```
+
+If you evaluate offline without a Gemini API key, add `--skip-judge-if-no-key`:
+
+```bash
+python -m eval.run_eval --model-path rule-baseline --backend rule-baseline --model-name rule-baseline --skip-judge-if-no-key
+```
+
+To run the TypeScript core tests:
+
+```bash
+cd core/ts
+npm ci
+npm test
+```
+
+### Data Pipeline
+
+The data pipeline extracts, filters, and formats chess data for training.
+To view all available options, run the pipeline CLI entry point from the repository root:
+
+```bash
+python -m data.pipeline.run_pipeline --help
+```
+
+The pipeline CLI supports these options:
+- `--sft-input`: Input JSONL file of human SFT commentary.
+- `--rl-input`: Input JSONL file of CC0 Lichess game positions.
+- `--output-dir`: Output directory for full splits.
+- `--public-dir`: Output directory for public splits.
+- `--export-dir`: Output directory for Hugging Face export package.
+- `--cache-path`: Path to Stockfish Parquet cache file.
+- `--drive-dir`: Google Drive sync directory.
+- `--stockfish-path`: Path to Stockfish executable.
+- `--depth`: Stockfish search depth.
+- `--workers`: Stockfish worker count.
+- `--eval-pool-size`: Target number of evaluation pool items.
+- `--rl-target-count`: Target number of RL prompts.
+- `--seed`: Random seed for deterministic selection.
+- `--upload-hf`: Upload public files to Hugging Face Hub.
+- `--sync-drive`: Synchronize files to Google Drive.
+
+### Local Data and Credentials
+
+The directories `data/raw/`, `data/processed/`, and `data/cache/` store local data only.
+Git ignores these directories.
+The project publishes the dataset on Hugging Face.
+If you use Hugging Face authentication, store `HF_ACCESS_TOKEN` in a local `.env` file.
+Never commit the `.env` file to version control.
 
 ## Licenses
 

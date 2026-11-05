@@ -21,12 +21,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements*.txt
 
       - name: Install dependencies
-        run: pip install python-chess pytest pandas pyarrow langdetect zstandard requests huggingface_hub
+        run: pip install -r requirements-dev.txt
 
       - name: Run Python tests
-        run: pytest core/python data/sources data/pipeline rewards
+        run: pytest core/python data/sources data/pipeline rewards eval
 
   ts-core:
     name: TypeScript Core
@@ -39,6 +41,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: core/ts/package-lock.json
 
       - name: Install dependencies
         working-directory: core/ts

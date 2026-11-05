@@ -67,6 +67,8 @@ def prepare_hf_export(
         "sft_val.jsonl",
         "sft_test_pool.parquet",
         "sft_test_pool.jsonl",
+        "eval_pool.parquet",
+        "eval_pool.jsonl",
         "rl_prompts.parquet",
         "rl_prompts.jsonl",
     ]

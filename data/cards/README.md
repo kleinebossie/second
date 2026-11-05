@@ -30,7 +30,7 @@ The pipeline follows the license rules in [`docs/data_sources.md`](../../docs/da
 
 | Data Source | License | Redistribution Policy | Public HF Export (`data/processed/public/`) | Local Rebuild (`data/processed/`) |
 |---|---|---|---|---|
-| **Lichess Open Game Database** (`data/sources/lichess_games.py`) | CC0 1.0 Universal | Full public domain rights. | Yes (`rl_prompts.*`) | Yes (`rl_prompts.*`) |
+| **Lichess Open Game Database** (`data/sources/lichess_games.py`) | CC0 1.0 Universal | Full public domain rights. | Yes (`rl_prompts.*`, `eval_pool.*`) | Yes (`rl_prompts.*`, `eval_pool.*`) |
 | **MATE Dataset** (`data/sources/mate.py`, Wang et al., NAACL 2025) | MIT License | Permissive redistribution with MIT notice. | Yes (`sft_*.parquet`, `sft_*.jsonl`) | Yes (`sft_*.parquet`, `sft_*.jsonl`) |
 | **Lichess Studies (Open License)** (`data/sources/lichess_studies.py`) | CC0 / CC-BY / Public Domain | Redistribute when an open license exists. | Yes (open-license subset) | Yes |
 | **Lichess Studies (Standard ToS)** (`data/sources/lichess_studies.py`) | Lichess Terms of Service | Author holds copyright. Do not redistribute text. | No (rebuild script only) | Yes |
@@ -46,38 +46,66 @@ The supervised fine-tuning (SFT) splits include records from `OutFlankShu/MATE_D
 
 ## 3. Pipeline Filter Counts (Phase 2.3 & 2.4)
 
-The collectors extracted **16,000 raw human commentary records** from GameKnot (`6,000`), Lichess Studies (`6,000`), and the MATE dataset (`4,000`). Stockfish analyzed unique positions at `depth=12` and `MultiPV=3`. The pipeline stored **47,876 unique FEN evaluations** in `data/cache/stockfish_eval_cache.parquet`.
+The collectors extracted **16,000 raw human commentary records** from GameKnot (`6,000`), Lichess Studies (`6,000`), and the MATE dataset (`4,000`). Stockfish analyzed unique positions at `depth=12` and `MultiPV=3`. The pipeline stored **49,328 unique FEN evaluations** in `data/cache/stockfish_eval_cache.parquet`.
 
-The filter module (`data/pipeline/filter_comments.py`) runs seven checks in order on each raw comment:
+The filter module (`data/pipeline/filter_comments.py`) runs eight checks in order on each raw comment:
 
 | Filter Stage | Description | Items Removed | Share of Raw Input |
 |---|---|---:|---:|
 | **Total Raw Input** | Raw extracted `(position, move, comment)` records | **16,000** | **100.0%** |
-| 1. `cleaned_empty_or_short` | Fewer than 8 words remain after stripping PGN tags, move numbers, and glyphs | 4,165 | 26.0% |
-| 2. `not_english` | `langdetect` (`seed=0`) identifies non-English text | 134 | 0.8% |
-| 3. `no_chess_content` | Text lacks piece names, square coordinates, SAN moves, or chess terms | 931 | 5.8% |
-| 4. `illegal_move_or_wrong_piece` | Text names an illegal SAN move or puts a piece on the wrong square (`rewards/checks.py`) | 4,164 | 26.0% |
-| 5. `tone_disagrees_with_verdict` | Praise appears on an error move, or criticism appears on a good move | 191 | 1.2% |
-| 6. `links_usernames_offensive` | Text contains URLs, `@username` handles, or profanity | 69 | 0.4% |
-| 7. `duplicate` | Text matches an earlier fingerprint or 4-gram shingle set (Jaccard >= 0.8) | 152 | 1.0% |
-| **Total Kept Examples** | Clean human commentary (`6,107` `short` + `87` `long`) | **6,194** | **38.7%** |
+| 1. `cleaned_empty_or_short` | Fewer than 8 words remain after stripping PGN tags, move numbers, and glyphs | 4,080 | 25.5% |
+| 2. `not_english` | `langdetect` (`seed=0`) identifies non-English text | 130 | 0.8% |
+| 3. `no_chess_content` | Text lacks piece names, square coordinates, SAN moves, or chess terms | 894 | 5.6% |
+| 4. `too_many_unknown_tokens` | Text contains more than two unknown or glued tokens after de-gluing | 645 | 4.0% |
+| 5. `illegal_move_or_wrong_piece` | Text names an illegal SAN move or puts a piece on the wrong square (`rewards/checks.py`) | 3,827 | 23.9% |
+| 6. `tone_disagrees_with_verdict` | Praise appears on an error move, or criticism appears on a good move | 187 | 1.2% |
+| 7. `links_usernames_offensive` | Text contains URLs, `@username` handles, or profanity | 42 | 0.3% |
+| 8. `duplicate` | Text matches an earlier fingerprint or 4-gram shingle set (Jaccard >= 0.8) | 146 | 0.9% |
+| **Total Kept Examples** | Clean human commentary (`6,010` `short` + `39` `long`) | **6,049** | **37.8%** |
 
 ## 4. Dataset Splits and Distributions (Phase 2.5 & 2.6)
 
 ### 4.1 SFT Splits (Split Strictly by Game)
 
-The split module (`data/pipeline/splits.py`) groups records by the SHA-256 hash of `game_id`. If a 4-field normalized FEN in `val` or `test_pool` also appears in `train`, the split module removes that record (`66` colliding opening records removed). Therefore, `train`, `val`, and `test_pool` share **zero games and zero board positions**.
+The split module (`data/pipeline/splits.py`) groups records by the SHA-256 hash of `game_id`. If a 4-field normalized FEN in `val` or `test_pool` also appears in `train`, the split module removes that record (`63` colliding opening records removed). Therefore, `train`, `val`, and `test_pool` share **zero games and zero board positions**.
 
 | Partition | Total Records (Local Rebuild) | Public Redistributable Records (`public/`) |
 |---|---:|---:|
-| `sft_train` | 5,659 | 973 |
-| `sft_val` (~2.3%) | 138 | 16 |
-| `sft_test_pool` (~5.4%) | 331 | 86 |
-| **Total SFT** | **6,128** | **1,075** |
+| `sft_train` | 5,522 | 973 |
+| `sft_val` (~2.3%) | 137 | 16 |
+| `sft_test_pool` (~5.5%) | 327 | 86 |
+| **Total SFT** | **5,986** | **1,075** |
 
-### 4.2 RL Prompt Set (`rl_prompts`)
+### 4.2 Evaluation Pool (`eval_pool`)
 
-The Lichess collector (`data/sources/lichess_games.py`) sampled **25,000 positions** from rated CC0 Lichess games. More than 80% of these games have an average player Elo between `800` and `2000`. The RL prompt generator (`data/pipeline/rl_prompts.py`) removed all games and 4-field FENs that appear in `sft_val` or `sft_test_pool`. Stockfish analyzed the remaining positions at `depth=12` and `MultiPV=3` to build **20,000 RL prompts**:
+The evaluation pool module (`data/pipeline/eval_pool.py`) builds candidate positions from CC0 Lichess games.
+These positions supply candidates for the frozen Phase 4 test set.
+Pairwise judge models evaluate model explanations directly.
+Therefore, evaluation items do not require human reference text.
+
+The evaluation pool reserves positions strictly by game.
+The generator excludes all games and four-field normalized FENs present in `sft_train`, `sft_val`, and `sft_test_pool`.
+The downstream RL prompt generator also excludes all evaluation pool games and FENs.
+Therefore, `eval_pool` shares zero games and zero board positions with SFT splits or RL prompts.
+
+The pool targets approximately 600 candidate items (double the 300-item test set):
+
+| Category | Count | Share | Target in `PLAN.md` |
+|---|---:|---:|---:|
+| **Total Evaluation Candidates** | **600** | **100.0%** | ~600 |
+| Task: `explain_move` (`Inaccuracy` / `Mistake` / `Blunder`) | 282 | 47.0% | ~240 (~40%) |
+| Task: `explain_move` (`Good` / `Best` / `Only move`) | 212 | 35.3% | ~180 (~30%) |
+| Task: `explain_position` | 106 | 17.7% | ≥90 (~15–30%) |
+| Level: `beginner` | 300 | 50.0% | 50% |
+| Level: `club` | 300 | 50.0% | 50% |
+| Detail: `short` | 480 | 80.0% | Balance |
+| Detail: `long` | 120 | 20.0% | ≥90 items |
+| Game Phase Coverage (`opening`, `middlegame`, `endgame`) | 600 | 100.0% | All phases covered |
+| Focus Player Elo (`800–2000`) | 600 | 100.0% | Preferred |
+
+### 4.3 RL Prompt Set (`rl_prompts`)
+
+The Lichess collector (`data/sources/lichess_games.py`) sampled **25,000 positions** from rated CC0 Lichess games. More than 80% of these games have an average player Elo between `800` and `2000`. The RL prompt generator (`data/pipeline/rl_prompts.py`) removed all games and 4-field FENs that appear in `sft_val`, `sft_test_pool`, or `eval_pool`. Stockfish analyzed the remaining positions at `depth=12` and `MultiPV=3` to build **20,000 RL prompts**:
 
 | Category | Count | Share | Target in `PLAN.md` |
 |---|---:|---:|---:|
@@ -101,7 +129,7 @@ python -m data.sources.lichess_studies --output data/raw/lichess_studies.jsonl -
 python -m data.sources.mate --output data/raw/mate.jsonl --max-items 4000
 cat data/raw/gameknot.jsonl data/raw/lichess_studies.jsonl data/raw/mate.jsonl > data/raw/sft_combined.jsonl
 
-# 2. Sample CC0 Lichess games for RL
+# 2. Sample CC0 Lichess games for RL and evaluation
 python -m data.sources.lichess_games --output data/raw/lichess_games.jsonl --max-positions 25000
 
 # 3. Run Stockfish analysis, filtering, splitting, and export
@@ -110,6 +138,7 @@ python -m data.pipeline.run_pipeline \
   --rl-input data/raw/lichess_games.jsonl \
   --depth 12 \
   --workers 12 \
+  --eval-pool-size 600 \
   --rl-target-count 20000
 ```
 

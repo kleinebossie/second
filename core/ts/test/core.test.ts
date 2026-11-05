@@ -405,6 +405,24 @@ describe("Full prompt formatting", () => {
     expect(lines).toContain("- Opening: Italian Game, Two Knights Defense.");
   });
 
+  it("formats explain_move user message when move captures piece", () => {
+    const fen = "r4rk1/4ppbp/2p3p1/1p1Q4/p2P4/2P2N2/PPK2PPP/3R3R b - - 0 19";
+    const evalBefore: EngineEval = {
+      fen,
+      pvs: [{ score: { type: "cp", value: 0 }, moves: ["c6d5", "f3e5"] }],
+    };
+    const evalAfter: EngineEval = {
+      fen: "r4rk1/4ppbp/6p1/1p1p4/p2P4/2P2N2/PPK2PPP/3R3R w - - 0 20",
+      pvs: [{ score: { type: "cp", value: 0 }, moves: ["f3e5"] }],
+    };
+    const msg = buildUserMessage("explain_move", "club", "short", fen, evalBefore, evalAfter, "c6d5");
+    const lines = msg.split("\n");
+
+    expect(lines).toContain("Move played: cxd5.");
+    expect(lines).toContain("- Material: equal.");
+    expect(lines).not.toContain("- White is up a queen in material.");
+  });
+
   it("formats explain_position user message", () => {
     const fen = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4";
     const evalBefore: EngineEval = {

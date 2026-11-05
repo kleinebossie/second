@@ -26,6 +26,10 @@ from .analyse import (
     analyse_records,
     find_stockfish_binary,
 )
+from .eval_pool import (
+    generate_eval_pool,
+    save_eval_pool,
+)
 from .filter_comments import (
     FilterStats,
     assign_detail_and_truncate,
@@ -66,7 +70,9 @@ def run_pipeline(
     stockfish_path: str | Path | None = None,
     depth: int = 12,
     num_workers: int = 4,
+    eval_pool_size: int = 600,
     rl_target_count: int = 20000,
+    seed: int = 42,
     filter_sft: bool = True,
     upload_hf: bool = False,
     sync_drive: bool = False,
@@ -77,7 +83,8 @@ def run_pipeline(
     Load and process supervised fine-tuning records.
     Evaluate positions and populate facts.
     Split records by game into train, validation, and test pool partitions.
-    Generate reinforcement learning prompt sets.
+    Generate the evaluation pool to reserve games and evaluation positions.
+    Generate reinforcement learning prompt sets excluding evaluation games and positions.
     Prepare export files and synchronize to storage targets.
     Return execution summary metrics.
     """
@@ -93,6 +100,7 @@ def run_pipeline(
     report: dict[str, Any] = {
         "sft_records_in": 0,
         "sft_splits": {},
+        "eval_pool_generated": 0,
         "rl_prompts_generated": 0,
         "cache_size": 0,
     }
@@ -203,7 +211,7 @@ def run_pipeline(
         split_stats = save_splits(splits, output_dir=out_path, public_dir=pub_path)
         report["sft_splits"] = split_stats
 
-    # Step 2: Process RL prompts from CC0 games
+    # Load candidate games if provided
     rl_candidates: list[dict[str, Any]] = []
     if rl_input_path and Path(rl_input_path).exists():
         with open(rl_input_path, "r", encoding="utf-8") as f:
@@ -213,6 +221,23 @@ def run_pipeline(
                     rl_candidates.append(json.loads(line))
         LOGGER.info("Loaded %d raw RL candidates from %s", len(rl_candidates), rl_input_path)
 
+    # Step 2: Process evaluation pool from CC0 games (reserves games)
+    if rl_candidates:
+        LOGGER.info("Generating %d eval pool items from candidates", eval_pool_size)
+        eval_items = generate_eval_pool(
+            rl_candidates,
+            target_count=eval_pool_size,
+            stockfish_path=sf_bin,
+            cache_path=cache.cache_path,
+            depth=depth,
+            num_workers=num_workers,
+            split_dir=out_path,
+            seed=seed,
+        )
+        eval_stats = save_eval_pool(eval_items, output_dir=out_path, public_dir=pub_path)
+        report["eval_pool_generated"] = eval_stats["count"]
+
+    # Step 3: Process RL prompts from CC0 games (excluding SFT val/test and eval pool)
     if rl_candidates:
         LOGGER.info("Generating %d RL prompts from candidates", rl_target_count)
         rl_prompts = generate_rl_prompts(
@@ -227,18 +252,18 @@ def run_pipeline(
         rl_stats = save_rl_prompts(rl_prompts, output_dir=out_path, public_dir=pub_path)
         report["rl_prompts_generated"] = rl_stats["count"]
 
-    # Step 3: Prepare Hugging Face export package
+    # Step 4: Prepare Hugging Face export package
     exp_path = Path(export_dir) if export_dir is not None else out_path / "hf_export"
     exp_dir = prepare_hf_export(public_dir=pub_path, export_dir=exp_path)
     report["export_directory"] = str(exp_dir)
 
-    # Step 4: Optional Hugging Face upload
+    # Step 5: Optional Hugging Face upload
     if upload_hf:
         LOGGER.info("Uploading dataset to Hugging Face Hub")
         hf_status = upload_to_hf(export_dir=exp_dir)
         report["hf_upload"] = hf_status
 
-    # Step 5: Optional Google Drive sync
+    # Step 6: Optional Google Drive sync
     if sync_drive or drive_dir:
         LOGGER.info("Synchronizing datasets to Google Drive")
         sync_status = sync_to_drive(
@@ -266,7 +291,9 @@ def main() -> None:
     parser.add_argument("--stockfish-path", type=str, default=None, help="Path to Stockfish executable.")
     parser.add_argument("--depth", type=int, default=12, help="Stockfish search depth.")
     parser.add_argument("--workers", type=int, default=4, help="Stockfish worker count.")
+    parser.add_argument("--eval-pool-size", type=int, default=600, help="Target number of evaluation pool items.")
     parser.add_argument("--rl-target-count", type=int, default=20000, help="Target number of RL prompts.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic hashing.")
     parser.add_argument("--upload-hf", action="store_true", help="Upload public files to Hugging Face Hub.")
     parser.add_argument("--sync-drive", action="store_true", help="Synchronize files to Google Drive.")
 
@@ -284,7 +311,9 @@ def main() -> None:
         stockfish_path=args.stockfish_path,
         depth=args.depth,
         num_workers=args.workers,
+        eval_pool_size=args.eval_pool_size,
         rl_target_count=args.rl_target_count,
+        seed=args.seed,
         upload_hf=args.upload_hf,
         sync_drive=args.sync_drive,
     )

@@ -6,6 +6,13 @@ It checks move legality, grounding, piece squares, tone, formatting, and jargon.
 
 from __future__ import annotations
 
+from .api import (
+    PromptInfo,
+    grpo_reward_fn,
+    parse_prompt,
+    score_completion,
+    verdict_accuracy,
+)
 from .checks import (
     CheckResult,
     check_beginner_jargon,
@@ -35,6 +42,7 @@ from .scorer import (
 
 __all__ = [
     "CheckResult",
+    "PromptInfo",
     "RewardResult",
     "check_beginner_jargon",
     "check_format",
@@ -44,14 +52,18 @@ __all__ = [
     "check_verdict_tone",
     "compute_reward",
     "find_tone_words",
+    "grpo_reward_fn",
     "parse_moves",
     "parse_piece_square_pairs",
+    "parse_prompt",
     "parse_squares",
     "parse_verdict_words",
     "score_better_move",
+    "score_completion",
     "score_key_point",
     "score_length",
     "score_level_fit",
     "score_no_repeats",
     "score_not_copied",
+    "verdict_accuracy",
 ]

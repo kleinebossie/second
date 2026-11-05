@@ -23,7 +23,12 @@ from .checks import (
     is_bad_verdict,
     strip_san_suffix,
 )
-from .parser import clean_move_token, parse_moves
+from .parser import (
+    clean_move_token,
+    parse_moves,
+    parse_piece_square_pairs,
+    parse_squares,
+)
 
 # Jargon words prohibited for beginner level fit
 CHESS_JARGON_WORDS: Final[list[str]] = [
@@ -132,10 +137,6 @@ PROBLEM_KEYWORDS: Final[list[str]] = [
     "undefended",
     "unprotected",
     "unanswered",
-    "capture",
-    "captures",
-    "captured",
-    "capturing",
     "fork",
     "forks",
     "forked",
@@ -143,18 +144,16 @@ PROBLEM_KEYWORDS: Final[list[str]] = [
     "pins",
     "pinned",
     "skewer",
+    "skewers",
+    "skewered",
     "checkmate",
     "mate",
-    "check",
-    "checks",
-    "defend",
-    "defends",
-    "defending",
-    "protect",
-    "protects",
-    "protecting",
-    "reply",
-    "replies",
+    "trapped",
+    "trap",
+    "traps",
+    "drop",
+    "drops",
+    "dropped",
     "weak",
     "weaken",
     "weakens",
@@ -168,34 +167,10 @@ PROBLEM_KEYWORDS: Final[list[str]] = [
     "dangerous",
     "danger",
     "passive",
-    "block",
-    "blocks",
-    "blocked",
-    "blocking",
-    "trapped",
-    "trap",
-    "traps",
-    "drop",
-    "drops",
-    "dropped",
     "waste",
     "wastes",
     "wasted",
     "wasting",
-    "tempo",
-    "time",
-    "allow",
-    "allows",
-    "allowed",
-    "allowing",
-    "give",
-    "gives",
-    "gave",
-    "giving",
-    "leave",
-    "leaves",
-    "left",
-    "leaving",
     "miss",
     "misses",
     "missed",
@@ -203,28 +178,11 @@ PROBLEM_KEYWORDS: Final[list[str]] = [
     "overlook",
     "overlooks",
     "overlooked",
-    "ignore",
-    "ignores",
-    "ignored",
     "problem",
     "trouble",
     "punish",
     "punishes",
-    "attack",
-    "attacks",
-    "attacked",
-    "pressure",
-    "advantage",
-    "initiative",
-    "counterplay",
-    "development",
-    "center",
-    "king",
-    "queen",
-    "rook",
-    "bishop",
-    "knight",
-    "pawn",
+    "punished",
 ]
 
 # Alternative move indicator phrases
@@ -234,11 +192,9 @@ ALT_MOVE_PHRASES: Final[list[str]] = [
     "better move",
     "better option",
     "better choice",
-    "better for",
     "would be better",
     "would have been better",
     "might have been better",
-    "mighthave been better",
     "could have been better",
     "was better",
     "is better",
@@ -246,25 +202,111 @@ ALT_MOVE_PHRASES: Final[list[str]] = [
     "should have played",
     "could play",
     "could have played",
-    "might play",
     "instead of",
-    "instead",
     "best move",
     "best was",
     "best is",
     "best option",
-    "prefer",
-    "preferred",
-    "preferable",
-    "needed to",
-    "had to",
-    "ought to",
-    "safer",
-    "stronger",
     "correct move",
     "right move",
-    "alternative",
+    "alternative was",
+    "alternative is",
+    "alternative move",
 ]
+
+# Chess piece names excluded from fact keyword matching
+PIECE_NAMES: Final[set[str]] = {
+    "king",
+    "kings",
+    "queen",
+    "queens",
+    "rook",
+    "rooks",
+    "bishop",
+    "bishops",
+    "knight",
+    "knights",
+    "pawn",
+    "pawns",
+    "piece",
+    "pieces",
+}
+
+# Generic words excluded from fact keyword matching
+GENERIC_WORDS: Final[set[str]] = {
+    "time",
+    "give",
+    "gives",
+    "gave",
+    "giving",
+    "leave",
+    "leaves",
+    "left",
+    "leaving",
+    "allow",
+    "allows",
+    "allowed",
+    "allowing",
+    "center",
+    "centre",
+    "central",
+    "development",
+}
+
+CONTENT_WORDS_STOPLIST: Final[set[str]] = (
+    FACT_STOPWORDS | PIECE_NAMES | GENERIC_WORDS
+)
+
+
+def _match_fact(
+    fact: str,
+    text: str,
+    text_lower: str,
+    text_words: set[str],
+    text_moves: set[str],
+    text_squares: set[str],
+    text_pairs: set[tuple[str, str]],
+) -> bool:
+    """Check if explanation text matches a specific fact.
+
+    Do not match generic phase or material facts.
+    Match when the text includes a square from the fact.
+    Match when the text includes a SAN move from the fact.
+    Match when the text includes a piece and square pair from the fact.
+    Match when the text includes at least two non-generic content words.
+    Do not count piece names alone as content words.
+    """
+    fact_stripped = fact.strip()
+    if fact_stripped.startswith(("Phase:", "Material:")):
+        return False
+
+    # Check square anchor
+    fact_squares = set(parse_squares(fact))
+    if fact_squares and any(sq in text_squares for sq in fact_squares):
+        return True
+
+    # Check SAN move anchor
+    fact_moves = set(parse_moves(fact))
+    fact_move_bases = {strip_san_suffix(m) for m in fact_moves}
+    if fact_moves:
+        for m in text_moves:
+            if m in fact_moves or strip_san_suffix(m) in fact_move_bases:
+                return True
+
+    # Check piece and square pair anchor
+    fact_pairs = set(parse_piece_square_pairs(fact))
+    if fact_pairs and any(pair in text_pairs for pair in fact_pairs):
+        return True
+
+    # Check non-generic content words
+    fact_words = [
+        w for w in _tokenize_words(fact)
+        if len(w) > 3 and w not in CONTENT_WORDS_STOPLIST
+    ]
+    matched_words = sum(
+        1 for w in set(fact_words) if w in text_words or w in text_lower
+    )
+    return matched_words >= 2
 
 
 def _extract_prompt_field(prompt_text: str, field_prefix: str) -> str:
@@ -311,19 +353,23 @@ def score_key_point(
     is_bad = is_bad_verdict(verdict)
     text_lower = text.lower()
     text_words = set(_tokenize_words(text))
+    text_moves = set(parse_moves(text))
+    text_squares = set(parse_squares(text))
+    text_pairs = set(parse_piece_square_pairs(text))
 
     # Count matched facts across non-generic facts (anti-hacking cap at 2 facts)
     matched_facts = 0
     if facts:
         for fact in facts:
-            fact_stripped = fact.strip()
-            if fact_stripped.startswith(("Phase:", "Material:")):
-                continue
-            fact_words = [
-                w for w in _tokenize_words(fact)
-                if len(w) > 3 and w not in FACT_STOPWORDS
-            ]
-            if any(w in text_words or w in text_lower for w in fact_words):
+            if _match_fact(
+                fact,
+                text,
+                text_lower,
+                text_words,
+                text_moves,
+                text_squares,
+                text_pairs,
+            ):
                 matched_facts += 1
 
     if is_bad:

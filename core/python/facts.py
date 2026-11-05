@@ -625,7 +625,7 @@ def _append_position_facts(
     for f in compute_king_safety_facts(board):
         raw_facts.append(f)
 
-    raw_facts.append(compute_material_fact(board_before))
+    raw_facts.append(compute_material_fact(board))
     raw_facts.append(compute_phase_fact(board_before))
 
     opening = lookup_opening(fen, move_uci)

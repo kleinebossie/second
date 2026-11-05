@@ -16,6 +16,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import pytest
 
+from data.pipeline.deglue import (
+    deglue_comment,
+    deglue_token,
+    has_too_many_unknown_tokens,
+    remove_reader_questions,
+)
 from data.pipeline.filter_comments import (
     FilterStats,
     assign_detail_and_truncate,
@@ -464,4 +470,169 @@ def test_run_pipeline_with_filter_sft(tmp_path: Path) -> None:
     assert "filter_stats" in report
     assert report["filter_stats"]["cleaned_empty_or_short"] == 1
     assert report["filter_stats"]["kept"] == 1
+
+
+# --- 7. De-gluing and Vocabulary Tests ---
+
+
+def test_deglue_target_examples() -> None:
+    """Verify de-gluing on all required example comments."""
+    # Test case 1: thequeens
+    t1 = "after exchanging thequeens he will have few chances"
+    assert deglue_comment(t1) == "after exchanging the queens he will have few chances"
+
+    # Test case 2: abishop and butwith
+    t2 = "Black has abishop, which can give some advantage against a knight in endgame, butwith so many pawns"
+    expected2 = "Black has a bishop, which can give some advantage against a knight in endgame, but with so many pawns"
+    assert deglue_comment(t2) == expected2
+
+    # Test case 3: momentmy
+    t3 = "at the momentmy pawn chain"
+    assert deglue_comment(t3) == "at the moment my pawn chain"
+
+    # Test case 4: fixedon
+    t4 = "fixedon black square h4"
+    assert deglue_comment(t4) == "fixed on black square h4"
+
+    # Test case 5: otherhand
+    t5 = "on the otherhand"
+    assert deglue_comment(t5) == "on the other hand"
+
+    # Test case 6: Preparinga
+    t6 = "Preparinga potentially dangerous"
+    assert deglue_comment(t6) == "Preparing a potentially dangerous"
+
+    # Test case 7: queenfor
+    t7 = "win queenfor rook"
+    assert deglue_comment(t7) == "win queen for rook"
+
+    # Test case 8: blackstarts
+    t8 = "blackstarts with Caro–Kann defense"
+    assert deglue_comment(t8) == "black starts with Caro–Kann defense"
+
+    # Test case 9: atthe
+    t9 = "atthe queen side"
+    assert deglue_comment(t9) == "at the queen side"
+
+
+def test_deglue_negative_examples() -> None:
+    """Verify that chess terms, notation, and valid compounds do not change."""
+    # Real compound words must never split
+    assert deglue_comment("counterattack") == "counterattack"
+    assert deglue_comment("sideline") == "sideline"
+    assert deglue_comment("endgame") == "endgame"
+    assert deglue_comment("kingside") == "kingside"
+    assert deglue_comment("queenside") == "queenside"
+    assert deglue_comment("fianchetto") == "fianchetto"
+    assert deglue_comment("himself") == "himself"
+    assert deglue_comment("without") == "without"
+    assert deglue_comment("into") == "into"
+    assert deglue_comment("another") == "another"
+
+    # Chess SAN notation and moves must never split
+    assert deglue_comment("Nxe5") == "Nxe5"
+    assert deglue_comment("Bxf7+") == "Bxf7+"
+    assert deglue_comment("e8=Q") == "e8=Q"
+    assert deglue_comment("Qh5#") == "Qh5#"
+    assert deglue_comment("Rad1") == "Rad1"
+
+    # Squares and castling must never split
+    assert deglue_comment("e4") == "e4"
+    assert deglue_comment("c5") == "c5"
+    assert deglue_comment("h8") == "h8"
+    assert deglue_comment("O-O") == "O-O"
+    assert deglue_comment("O-O-O") == "O-O-O"
+
+    # Move prefixes and numbers must never split
+    assert deglue_comment("14.") == "14."
+    assert deglue_comment("14...Nxe5") == "14...Nxe5"
+    assert deglue_comment("27") == "27"
+
+
+def test_remove_reader_questions() -> None:
+    """Verify removal of reader-directed questions while keeping rhetorical chess questions."""
+    # Standalone reader questions must be removed completely
+    assert remove_reader_questions("What do you think?") == ""
+    assert remove_reader_questions("Who do you think is better now?") == ""
+    assert remove_reader_questions("Do you agree with this move?") == ""
+    assert remove_reader_questions("Any ideas on the best course of action here for black?") == ""
+    assert remove_reader_questions("Can you see the move which wins the game?") == ""
+
+    # Reader question at the end of a comment must be removed
+    text_with_question = "White plays Nf3 to develop the knight and control central squares. What do you think?"
+    expected = "White plays Nf3 to develop the knight and control central squares."
+    assert remove_reader_questions(text_with_question) == expected
+
+    # Trailing question clause with comma must be removed
+    trailing_clause = "now maybe a3 would be better for pawn structure, what do you think?"
+    expected_clause = "now maybe a3 would be better for pawn structure."
+    assert remove_reader_questions(trailing_clause) == expected_clause
+
+    # Rhetorical chess questions must NOT be removed
+    rhetorical_1 = "Why not 15... Nxe5? Black gets a strong attack on the king."
+    assert remove_reader_questions(rhetorical_1) == rhetorical_1
+
+    rhetorical_2 = "Can White defend against the mating threat on h2? No, White is lost."
+    assert remove_reader_questions(rhetorical_2) == rhetorical_2
+
+
+def test_filter_reader_question_short_drop() -> None:
+    """Verify that removing a reader question leaves text that drops if too short."""
+    stats = FilterStats()
+    # 4 words + question -> after question removal leaves 4 words (< 8 words)
+    short_comment = "A great chess move. What do you think?"
+    kept, reason, cleaned = filter_comment(
+        text=short_comment,
+        fen=ITALIAN_FEN,
+        stats=stats,
+    )
+    assert kept is False
+    assert reason == "cleaned_empty_or_short"
+    assert stats.cleaned_empty_or_short == 1
+    assert cleaned == "A great chess move."
+
+
+def test_filter_too_many_unknown_tokens() -> None:
+    """Verify rejection of comments with more than two suspicious tokens."""
+    stats = FilterStats()
+    corrupt_text = "The knight moves qwertyuiop and zxcvbnmasdfgh with kljhgfdsa across the center."
+    kept, reason, _ = filter_comment(
+        text=corrupt_text,
+        fen=ITALIAN_FEN,
+        stats=stats,
+    )
+    assert kept is False
+    assert reason == "too_many_unknown_tokens"
+    assert stats.too_many_unknown_tokens == 1
+    assert stats.to_dict()["too_many_unknown_tokens"] == 1
+
+
+def test_filter_known_words_and_chess_compounds_pass() -> None:
+    """Verify that comments with standard compounds and chess terms are kept."""
+    stats = FilterStats()
+    good_text = "White launches a counterattack on the kingside to simplify into a winning endgame."
+    kept, reason, _ = filter_comment(
+        text=good_text,
+        fen=ITALIAN_FEN,
+        stats=stats,
+    )
+    assert kept is True
+    assert reason is None
+    assert stats.kept == 1
+    assert stats.too_many_unknown_tokens == 0
+
+
+def test_pre_filter_too_many_unknown_tokens() -> None:
+    """Verify pre-filter rejection of comments with too many unknown tokens."""
+    stats = FilterStats()
+    corrupt_text = "The knight moves qwertyuiop and zxcvbnmasdfgh with kljhgfdsa across the center."
+    kept, reason, _ = pre_filter_comment(
+        text=corrupt_text,
+        fen=ITALIAN_FEN,
+        stats=stats,
+    )
+    assert kept is False
+    assert reason == "too_many_unknown_tokens"
+    assert stats.too_many_unknown_tokens == 1
+
 

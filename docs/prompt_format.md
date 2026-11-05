@@ -45,12 +45,14 @@ Use this task to explain a specific move that a player made:
 - It includes the `Verdict` line.
 - It includes the `winning chances` before and after the move.
 - It includes the `Best move` line and the `Best line`.
+- For this task, the material fact describes the position after the played move.
 
 #### Task: `explain_position`
 Use this task to explain the current board position:
 - It does not include a `Move played` line.
 - It does not include a `Verdict` line.
 - It lists the top candidate moves for the side to move.
+- For this task, the material fact describes the current board position.
 
 ## Canonical Example
 
@@ -86,6 +88,8 @@ Follow these rules when you generate fact lines:
 4. Name squares with lower case letters and numbers (for example: `e4`, `f7`).
 5. Name pieces with lower case words in prose (for example: "the knight on e5", "the bishop on c4").
 6. Keep sentences short and clear.
+7. For `explain_move`, calculate the material fact on the board after the played move.
+8. For `explain_position`, calculate the material fact on the current board.
 
 ## Level Guidelines
 

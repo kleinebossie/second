@@ -21,6 +21,19 @@ from rewards.checks import (
 )
 from rewards.parser import parse_moves, parse_squares
 
+try:
+    from .deglue import (
+        deglue_comment,
+        has_too_many_unknown_tokens,
+        remove_reader_questions,
+    )
+except ImportError:
+    from data.pipeline.deglue import (  # type: ignore
+        deglue_comment,
+        has_too_many_unknown_tokens,
+        remove_reader_questions,
+    )
+
 # Ensure deterministic language detection
 DetectorFactory.seed = 0
 
@@ -182,6 +195,7 @@ class FilterStats:
     cleaned_empty_or_short: int = 0
     not_english: int = 0
     no_chess_content: int = 0
+    too_many_unknown_tokens: int = 0
     illegal_move_or_wrong_piece: int = 0
     tone_disagrees_with_verdict: int = 0
     links_usernames_offensive: int = 0
@@ -197,6 +211,7 @@ class FilterStats:
             "cleaned_empty_or_short": self.cleaned_empty_or_short,
             "not_english": self.not_english,
             "no_chess_content": self.no_chess_content,
+            "too_many_unknown_tokens": self.too_many_unknown_tokens,
             "illegal_move_or_wrong_piece": self.illegal_move_or_wrong_piece,
             "tone_disagrees_with_verdict": self.tone_disagrees_with_verdict,
             "links_usernames_offensive": self.links_usernames_offensive,
@@ -208,11 +223,13 @@ class FilterStats:
 
 
 def clean_comment(text: str) -> str:
-    """Clean PGN annotations, leading move numbers, and extra spacing.
+    """Clean PGN annotations, leading move numbers, extra spacing, and glued words.
 
     Remove PGN tags like [%eval 0.2] and [%clk 0:05].
     Remove move numbers at the start of text.
     Remove standalone annotation symbols.
+    Separate glued words from lost line breaks.
+    Remove reader-directed questions.
     Normalize internal whitespace.
     """
     # 1. Strip PGN tags
@@ -227,7 +244,13 @@ def clean_comment(text: str) -> str:
     # 4. Remove standalone annotation symbols
     cleaned = STANDALONE_ANNOTATION_RE.sub(" ", cleaned)
 
-    # 5. Final whitespace normalization
+    # 5. Separate glued words
+    cleaned = deglue_comment(cleaned)
+
+    # 6. Remove reader-directed questions
+    cleaned = remove_reader_questions(cleaned)
+
+    # 7. Final whitespace normalization
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     return cleaned
@@ -381,10 +404,11 @@ def filter_comment(
     1. cleaned_empty_or_short (< 8 words after cleaning)
     2. not_english (language detection)
     3. no_chess_content (missing chess entities)
-    4. illegal_move_or_wrong_piece (Phase 3 checks)
-    5. tone_disagrees_with_verdict (Phase 3 tone check)
-    6. links_usernames_offensive (links, handles, or profanity)
-    7. duplicate (exact or near-duplicate)
+    4. too_many_unknown_tokens (suspicious words after de-gluing)
+    5. illegal_move_or_wrong_piece (Phase 3 checks)
+    6. tone_disagrees_with_verdict (Phase 3 tone check)
+    7. links_usernames_offensive (links, handles, or profanity)
+    8. duplicate (exact or near-duplicate)
 
     Return a tuple of (kept_flag, reject_reason, cleaned_text).
     """
@@ -417,7 +441,13 @@ def filter_comment(
             stats.no_chess_content += 1
         return False, "no_chess_content", cleaned
 
-    # 4. Check illegal moves and wrong piece on square
+    # 4. Check unknown tokens after de-gluing
+    if has_too_many_unknown_tokens(cleaned):
+        if stats:
+            stats.too_many_unknown_tokens += 1
+        return False, "too_many_unknown_tokens", cleaned
+
+    # 5. Check illegal moves and wrong piece on square
     legal_res = check_legal_moves(
         text=cleaned,
         fen=fen,
@@ -516,7 +546,13 @@ def pre_filter_comment(
             stats.no_chess_content += 1
         return False, "no_chess_content", cleaned
 
-    # 4. Check board validity, move legality, and piece on square
+    # 4. Check unknown tokens after de-gluing
+    if has_too_many_unknown_tokens(cleaned):
+        if stats:
+            stats.too_many_unknown_tokens += 1
+        return False, "too_many_unknown_tokens", cleaned
+
+    # 5. Check board validity, move legality, and piece on square
     try:
         board = chess.Board(fen)
         if not board.is_valid():

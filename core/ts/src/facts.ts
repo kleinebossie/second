@@ -852,7 +852,7 @@ export function appendPositionFacts(
     rawFacts.push(f);
   }
 
-  rawFacts.push(computeMaterialFact(posBefore));
+  rawFacts.push(computeMaterialFact(board));
   rawFacts.push(computePhaseFact(posBefore));
 
   const opening = lookupOpening(fen, moveUci);

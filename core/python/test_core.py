@@ -478,6 +478,29 @@ def test_build_user_message_explain_move() -> None:
     assert "- Opening: Italian Game, Two Knights Defense." in lines
 
 
+def test_build_user_message_explain_move_capture() -> None:
+    """Verify material reflects the position after a capture move."""
+    fen = "r4rk1/4ppbp/2p3p1/1p1Q4/p2P4/2P2N2/PPK2PPP/3R3R b - - 0 19"
+    eval_before = {
+        "fen": fen,
+        "pvs": [
+            {"score": {"type": "cp", "value": 0}, "moves": ["c6d5", "f3e5"]}
+        ],
+    }
+    eval_after = {
+        "fen": "r4rk1/4ppbp/6p1/1p1p4/p2P4/2P2N2/PPK2PPP/3R3R w - - 0 20",
+        "pvs": [
+            {"score": {"type": "cp", "value": 0}, "moves": ["f3e5"]}
+        ],
+    }
+    msg = build_user_message("explain_move", "club", "short", fen, eval_before, eval_after, "c6d5")
+    lines = msg.split("\n")
+
+    assert "Move played: cxd5." in lines
+    assert "- Material: equal." in lines
+    assert "- White is up a queen in material." not in lines
+
+
 def test_build_user_message_explain_position() -> None:
     """Verify explain_position user message formatting."""
     fen = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"

@@ -44,17 +44,22 @@ DEFAULT_PUBLIC_DIR = Path("data/processed/public")
 
 def load_excluded_keys(
     split_dir: Path | str,
+    split_names: tuple[str, ...] | list[str] = (
+        "sft_val",
+        "sft_test_pool",
+        "eval_pool",
+    ),
 ) -> tuple[set[str], set[str]]:
-    """Load game identifiers and FEN positions from validation and test splits.
+    """Load game identifiers and FEN positions from partition files.
 
-    Read sft_val and sft_test_pool files if they exist.
+    Read split files if they exist in the directory.
     Return a tuple containing excluded game identifiers and excluded FEN strings.
     """
     p_dir = Path(split_dir)
     excluded_games: set[str] = set()
     excluded_fens: set[str] = set()
 
-    for name in ("sft_val", "sft_test_pool"):
+    for name in split_names:
         jsonl_path = p_dir / f"{name}.jsonl"
         parquet_path = p_dir / f"{name}.parquet"
 
@@ -83,6 +88,163 @@ def load_excluded_keys(
         len(excluded_fens),
     )
     return excluded_games, excluded_fens
+
+
+def synthesize_after_from_pv(
+    fen: str,
+    pv_entry: dict[str, Any],
+) -> tuple[str, dict[str, Any]] | None:
+    """Derive move and continuation evaluation from a principal variation.
+
+    If moves are empty, return None.
+    If the first move is not legal, return None.
+    Return a tuple containing the UCI move string and the synthetic evaluation after.
+    """
+    moves = pv_entry.get("moves", [])
+    if not moves:
+        return None
+    uci = moves[0]
+    board = chess.Board(fen)
+    try:
+        m_obj = chess.Move.from_uci(uci)
+        if m_obj not in board.legal_moves:
+            return None
+        board.push(m_obj)
+    except ValueError:
+        return None
+    synth_after = {
+        "fen": board.fen(),
+        "pvs": [
+            {
+                "score": pv_entry["score"],
+                "moves": moves[1:],
+            }
+        ],
+    }
+    return uci, synth_after
+
+
+def format_prompt_record(
+    item_id: str,
+    game_id: str,
+    fen: str,
+    task: str,
+    level: str,
+    detail: str,
+    eval_before: dict[str, Any],
+    eval_after: dict[str, Any] | None = None,
+    move_uci: str | None = None,
+    verdict: str | None = None,
+    source: str = "lichess_games",
+    redistributable: bool = True,
+) -> dict[str, Any]:
+    """Format a single chess prompt record with facts and Qwen template.
+
+    Extract facts from the position and evaluations.
+    Build user message according to task, level, and detail parameters.
+    Format the complete chat prompt for Qwen chat models.
+    Return a record dictionary with all required fields.
+    """
+    facts = extract_facts(
+        task=task,
+        fen=fen,
+        eval_before=eval_before,
+        eval_after=eval_after,
+        move_uci=move_uci,
+    )
+
+    user_message = build_user_message(
+        task=task,
+        level=level,
+        detail=detail,
+        fen=fen,
+        eval_before=eval_before,
+        eval_after=eval_after,
+        move_uci=move_uci,
+    )
+    chat_prompt = format_qwen_chat_prompt(user_message)
+
+    return {
+        "id": item_id,
+        "game_id": game_id,
+        "fen": fen,
+        "task": task,
+        "level": level,
+        "detail": detail,
+        "move_uci": move_uci,
+        "verdict": verdict,
+        "facts": facts,
+        "user_message": user_message,
+        "chat_prompt": chat_prompt,
+        "source": source,
+        "redistributable": redistributable,
+        "eval_before": eval_before,
+        "eval_after": eval_after,
+    }
+
+
+def evaluate_candidates_with_stockfish(
+    candidates: list[dict[str, Any]],
+    analyzer: StockfishAnalyzer,
+    depth: int = 10,
+    max_count: int | None = None,
+) -> list[dict[str, Any]]:
+    """Evaluate candidate positions with Stockfish multi-pv analysis.
+
+    Analyze eval_before at MultiPV=3.
+    Derive or analyze eval_after for candidate moves.
+    Return list of evaluated candidates.
+    """
+    eval_subset = candidates[:max_count] if max_count else candidates
+
+    before_fens: list[tuple[str, int]] = [(cand["fen"], 3) for cand in eval_subset]
+    analyzer.analyze_fens(before_fens, flush_interval=500)
+
+    after_fens: list[tuple[str, int]] = []
+    for cand in eval_subset:
+        eb = analyzer.cache.get(cand["fen"], min_depth=depth, min_multipv=3)
+        cand["eval_before"] = eb
+        move_uci = cand.get("move_uci")
+        if not move_uci or not eb:
+            continue
+
+        matched_pv = None
+        for pv in eb.get("pvs", []):
+            if pv.get("moves") and pv["moves"][0] == move_uci:
+                matched_pv = pv
+                break
+
+        board = chess.Board(cand["fen"])
+        board.push(chess.Move.from_uci(move_uci))
+        fen_after = board.fen()
+
+        if matched_pv is not None:
+            cand["eval_after"] = {
+                "fen": fen_after,
+                "pvs": [
+                    {
+                        "score": matched_pv["score"],
+                        "moves": matched_pv["moves"][1:],
+                    }
+                ],
+            }
+        else:
+            cached_after = analyzer.cache.get(fen_after, min_depth=depth, min_multipv=1)
+            if cached_after is not None:
+                cand["eval_after"] = cached_after
+            else:
+                after_fens.append((fen_after, 1))
+
+    if after_fens:
+        analyzer.analyze_fens(after_fens, flush_interval=500)
+        for cand in eval_subset:
+            if "eval_after" not in cand and cand.get("move_uci"):
+                board = chess.Board(cand["fen"])
+                board.push(chess.Move.from_uci(cand["move_uci"]))
+                cand["eval_after"] = analyzer.cache.get(board.fen(), min_depth=depth, min_multipv=1)
+
+    return eval_subset
+
 
 
 def build_rl_prompts_from_evaluated(
@@ -183,40 +345,24 @@ def build_rl_prompts_from_evaluated(
             if not eval_before or not eval_before.get("pvs"):
                 continue
             pvs = eval_before["pvs"]
-            if pvs[0].get("moves"):
-                best_uci = pvs[0]["moves"][0]
-                if (fen, best_uci) in seen_good:
-                    continue
-                # Construct eval_after from the continuation of pvs[0]
-                board = chess.Board(fen)
-                try:
-                    m_obj = chess.Move.from_uci(best_uci)
-                    if m_obj not in board.legal_moves:
-                        continue
-                    board.push(m_obj)
-                except ValueError:
-                    continue
-                synth_after = {
-                    "fen": board.fen(),
-                    "pvs": [
-                        {
-                            "score": pvs[0]["score"],
-                            "moves": pvs[0]["moves"][1:],
-                        }
-                    ],
-                }
-                v = classify_verdict(eval_before, synth_after, best_uci)
-                if v in good_verdicts:
-                    seen_good.add((fen, best_uci))
-                    good_move_bucket.append({
-                        "game_id": gid,
-                        "fen": fen,
-                        "task": "explain_move",
-                        "move_uci": best_uci,
-                        "verdict": v,
-                        "eval_before": eval_before,
-                        "eval_after": synth_after,
-                    })
+            res = synthesize_after_from_pv(fen, pvs[0])
+            if not res:
+                continue
+            best_uci, synth_after = res
+            if (fen, best_uci) in seen_good:
+                continue
+            v = classify_verdict(eval_before, synth_after, best_uci)
+            if v in good_verdicts:
+                seen_good.add((fen, best_uci))
+                good_move_bucket.append({
+                    "game_id": gid,
+                    "fen": fen,
+                    "task": "explain_move",
+                    "move_uci": best_uci,
+                    "verdict": v,
+                    "eval_before": eval_before,
+                    "eval_after": synth_after,
+                })
 
     if len(bad_move_bucket) < target_bad:
         seen_bad = {(r["fen"], r["move_uci"]) for r in bad_move_bucket}
@@ -232,28 +378,12 @@ def build_rl_prompts_from_evaluated(
                 continue
             pvs = eval_before["pvs"]
             for alt_pv in pvs[1:]:
-                if not alt_pv.get("moves"):
+                res = synthesize_after_from_pv(fen, alt_pv)
+                if not res:
                     continue
-                alt_uci = alt_pv["moves"][0]
+                alt_uci, synth_after = res
                 if (fen, alt_uci) in seen_bad:
                     continue
-                board = chess.Board(fen)
-                try:
-                    m_obj = chess.Move.from_uci(alt_uci)
-                    if m_obj not in board.legal_moves:
-                        continue
-                    board.push(m_obj)
-                except ValueError:
-                    continue
-                synth_after = {
-                    "fen": board.fen(),
-                    "pvs": [
-                        {
-                            "score": alt_pv["score"],
-                            "moves": alt_pv["moves"][1:],
-                        }
-                    ],
-                }
                 v = classify_verdict(eval_before, synth_after, alt_uci)
                 if v in bad_verdicts:
                     seen_bad.add((fen, alt_uci))
@@ -296,52 +426,90 @@ def build_rl_prompts_from_evaluated(
         # 80% short, 20% long (4 short, 1 long)
         detail = "long" if (idx % 5 == 4) else "short"
 
-        task = item["task"]
-        fen = item["fen"]
-        move_uci = item["move_uci"]
-        eval_before = item["eval_before"]
-        eval_after = item["eval_after"]
-        verdict = item["verdict"]
-
-        facts = extract_facts(
-            task=task,
-            fen=fen,
-            eval_before=eval_before,
-            eval_after=eval_after,
-            move_uci=move_uci,
-        )
-
-        user_message = build_user_message(
-            task=task,
+        record = format_prompt_record(
+            item_id=f"rl_{idx:06d}",
+            game_id=item["game_id"],
+            fen=item["fen"],
+            task=item["task"],
             level=level,
             detail=detail,
-            fen=fen,
-            eval_before=eval_before,
-            eval_after=eval_after,
-            move_uci=move_uci,
+            eval_before=item["eval_before"],
+            eval_after=item["eval_after"],
+            move_uci=item["move_uci"],
+            verdict=item["verdict"],
+            source="lichess_games",
+            redistributable=True,
         )
-        chat_prompt = format_qwen_chat_prompt(user_message)
-
-        record = {
-            "id": f"rl_{idx:06d}",
-            "game_id": item["game_id"],
-            "fen": fen,
-            "task": task,
-            "level": level,
-            "detail": detail,
-            "move_uci": move_uci,
-            "verdict": verdict,
-            "facts": facts,
-            "user_message": user_message,
-            "chat_prompt": chat_prompt,
-            "source": "lichess_games",
-            "redistributable": True,
-            "eval_before": eval_before,
-            "eval_after": eval_after,
-        }
         final_prompts.append(record)
 
     return final_prompts
+
+
+def evaluate_candidates_with_stockfish(
+    candidates: list[dict[str, Any]],
+    analyzer: StockfishAnalyzer,
+    depth: int = 12,
+    max_count: int | None = None,
+) -> list[dict[str, Any]]:
+    """Evaluate candidate positions and played moves with Stockfish.
+
+    If max_count is provided, cap the subset of candidates to analyze.
+    Analyze eval_before positions with MultiPV 3.
+    Derive or analyze eval_after positions for candidate moves.
+    Return the evaluated candidates subset.
+    """
+    if max_count is not None:
+        eval_subset = candidates[:max_count]
+    else:
+        eval_subset = candidates
+
+    before_fens: list[tuple[str, int]] = [(cand["fen"], 3) for cand in eval_subset]
+    analyzer.analyze_fens(before_fens, flush_interval=500)
+
+    after_fens: list[tuple[str, int]] = []
+    for cand in eval_subset:
+        eb = analyzer.cache.get(cand["fen"], min_depth=depth, min_multipv=3)
+        cand["eval_before"] = eb
+        move_uci = cand.get("move_uci")
+        if not move_uci or not eb:
+            continue
+
+        matched_pv = None
+        for pv in eb.get("pvs", []):
+            if pv.get("moves") and pv["moves"][0] == move_uci:
+                matched_pv = pv
+                break
+
+        board = chess.Board(cand["fen"])
+        board.push(chess.Move.from_uci(move_uci))
+        fen_after = board.fen()
+
+        if matched_pv is not None:
+            cand["eval_after"] = {
+                "fen": fen_after,
+                "pvs": [
+                    {
+                        "score": matched_pv["score"],
+                        "moves": matched_pv["moves"][1:],
+                    }
+                ],
+            }
+        else:
+            cached_after = analyzer.cache.get(fen_after, min_depth=depth, min_multipv=1)
+            if cached_after is not None:
+                cand["eval_after"] = cached_after
+            else:
+                after_fens.append((fen_after, 1))
+
+    if after_fens:
+        analyzer.analyze_fens(after_fens, flush_interval=500)
+        for cand in eval_subset:
+            if "eval_after" not in cand and cand.get("move_uci"):
+                board = chess.Board(cand["fen"])
+                board.push(chess.Move.from_uci(cand["move_uci"]))
+                cand["eval_after"] = analyzer.cache.get(board.fen(), min_depth=depth, min_multipv=1)
+
+    return eval_subset
 
 
 def generate_rl_prompts(
@@ -389,58 +557,12 @@ def generate_rl_prompts(
 
         # Cap candidates analyzed to avoid redundant engine work beyond target_count
         max_candidates_to_eval = min(len(valid_candidates), max(int(target_count * 1.15), target_count + 100))
-        eval_subset = valid_candidates[:max_candidates_to_eval]
-
-        # First evaluate eval_before at MultiPV=3 for the subset
-        before_fens: list[tuple[str, int]] = [(cand["fen"], 3) for cand in eval_subset]
-        analyzer.analyze_fens(before_fens, flush_interval=500)
-
-        # Identify which candidates need an extra eval_after call
-        # Note: if played move is already in pvs[0..2] of eval_before, we can derive its score and continuation directly!
-        after_fens: list[tuple[str, int]] = []
-        for cand in eval_subset:
-            eb = analyzer.cache.get(cand["fen"], min_depth=depth, min_multipv=3)
-            cand["eval_before"] = eb
-            move_uci = cand.get("move_uci")
-            if not move_uci or not eb:
-                continue
-
-            matched_pv = None
-            for pv in eb.get("pvs", []):
-                if pv.get("moves") and pv["moves"][0] == move_uci:
-                    matched_pv = pv
-                    break
-
-            board = chess.Board(cand["fen"])
-            board.push(chess.Move.from_uci(move_uci))
-            fen_after = board.fen()
-
-            if matched_pv is not None:
-                cand["eval_after"] = {
-                    "fen": fen_after,
-                    "pvs": [
-                        {
-                            "score": matched_pv["score"],
-                            "moves": matched_pv["moves"][1:],
-                        }
-                    ],
-                }
-            else:
-                cached_after = analyzer.cache.get(fen_after, min_depth=depth, min_multipv=1)
-                if cached_after is not None:
-                    cand["eval_after"] = cached_after
-                else:
-                    after_fens.append((fen_after, 1))
-
-        if after_fens:
-            analyzer.analyze_fens(after_fens, flush_interval=500)
-            for cand in eval_subset:
-                if "eval_after" not in cand and cand.get("move_uci"):
-                    board = chess.Board(cand["fen"])
-                    board.push(chess.Move.from_uci(cand["move_uci"]))
-                    cand["eval_after"] = analyzer.cache.get(board.fen(), min_depth=depth, min_multipv=1)
-
-        valid_candidates = eval_subset
+        valid_candidates = evaluate_candidates_with_stockfish(
+            candidates=valid_candidates,
+            analyzer=analyzer,
+            depth=depth,
+            max_count=max_candidates_to_eval,
+        )
 
     prompts = build_rl_prompts_from_evaluated(
         valid_candidates,

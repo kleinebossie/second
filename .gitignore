@@ -73,6 +73,9 @@ data/cache/
 data/raw/
 data/processed/
 .cache/
+eval/rating_space/chesscom_pairs.jsonl
+eval/rating_space/votes.jsonl
+eval/results/judge_cache.jsonl
 
 # Operating system files
 .DS_Store
