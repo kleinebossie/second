@@ -16,18 +16,18 @@
 | Levels | `beginner` (under ~1200) and `club` (~1200–2000). |
 | Language | English only. |
 | Output | Short prose, 2–4 sentences, ≤ ~80 words. A "more detail" mode gives a longer answer. |
-| Base | Qwen 3.5 **instruct**, **non-thinking** mode, text only. |
+| Base | Qwen 3.5 **instruct**, text only. One model supports both **Fast** (`non-thinking`) and **Thinking** (`<think>`) modes. |
 | Model order | 2B → 0.8B → 4B → 9B. No 27B. |
-| Data | Filtered human commentary only. No synthetic data. |
-| Training | LoRA SFT warm-up, then GRPO RL. |
+| Data | Filtered human commentary + engine-grounded synthetic explanations from an Apache 2.0 open-weight teacher model, verified by rule checks. |
+| Training | LoRA (or full-parameter) SFT warm-up, then token-level GRPO RL (DAPO / GDPO) with graded rewards and multiplicative length rescaling. |
 | RL reward | Rule checks only. No LLM judge inside the RL loop. |
-| Eval | Fixed test set. Gemini Flash judges the test set (small API cost is OK). Blind A/B human ratings. |
+| Eval | Fixed test set + separate dev set (`eval/devset-1.0.jsonl`). Debiased Gemini Flash judge + Length-Controlled Win Rate (LC-WR) + 60-item calibration set. Blind A/B human ratings. |
 | Baselines | Base Qwen 3.5 (same size), Gemini Flash, chess.com coach (human ratings only). |
 | Budget | \$0 extra, except: small Gemini API cost for eval, and the \$5 Chrome Web Store fee. Compute = 200 Colab units per month. |
 | Extension | Chrome + Edge, Manifest V3, Side Panel UI, Lichess first. |
 | Engine in extension | Stockfish WASM locally + Lichess cloud eval, with polite use of the API. |
 | Fair play | Works only after a game ends. Fail closed: if the status is unclear, it stays off. |
-| Buttons | "Explain this move" and "Review game". |
+| Buttons | "Explain this move", "Review game", and a **Reasoning mode** switch (`Fast` vs `Thinking`). |
 | No WebGPU | Show a clear message. 0.8B is the fallback for weak GPUs. |
 | Privacy | No telemetry. Thumbs up/down ratings stay local. The user can export them. |
 | Open source | Models, data, training code, and reward code: Apache 2.0. The **extension**: GPLv3, because it bundles Stockfish (GPLv3). Everything is published. Unclear-license data: train on it, publish only the rebuild script. |
@@ -49,7 +49,8 @@ flowchart TD
     P3 --> P4
     P4 --> P5["Phase 5: SFT on 2B"]
     P5 --> P6["Phase 6: GRPO RL on 2B"]
-    P6 --> P7["Phase 7: Eval and human ratings"]
+    P6 --> P65["Phase 6.5: 2B capability iteration - TRAINING_PLAN.md"]
+    P65 --> P7["Phase 7: Eval and human ratings"]
     P7 --> P8["Phase 8: Export for the browser"]
     P0 --> P9["Phase 9: Extension"]
     P1 --> P9
@@ -155,6 +156,8 @@ Facts to compute:
 | Hanging pieces | `The knight on e5 is not defended.` |
 | Checks and captures available | `Black has a check: Qa5+.` |
 | Threats (what the side to move threatens if it could move again) | `White threatens Bxh7+.` |
+| Tactical motifs (forks, pins, skewers, discovered attacks, mate threats) | `Ng5 forks the queen on d8 and the rook on f8.` / `Bb5 pins the knight on c6 to the king on e8.` |
+| Best-move refutation reason (on bad moves) | `Best move Bd3 defends the pawn on e4.` |
 | King safety (simple) | `Black has not castled.` |
 | Game phase | `Phase: middlegame.` |
 | Opening name (if in the book) | `Opening: Italian Game.` |
@@ -281,6 +284,8 @@ Goal: one Python module, `rewards/`, that scores an explanation. RL uses it for 
 | Grounded moves | A named move is not in the facts (played move, best move, best line, replies, threats). |
 | Piece on square | "the knight on e5", but there is no knight on e5 (in the position or after the played move). |
 | Verdict tone | Positive words for an Inaccuracy, Mistake, or Blunder. Negative words for a Best or Good move. |
+| Relational and opening claims | Unverified attacks, defenses, pins, forks, mate threats, or opening names that contradict the position and facts. |
+| Coach voice | First-person player diary voice (`"I"`, `"my"`, `"me"`). The model must speak as a coach. |
 | Format | Markdown, lists, or headings in the output. Text that is not English. Repeats the prompt. |
 | Engine jargon for beginners | `level: beginner` and the text has "centipawn", "eval", "+1.3", "depth", "engine", or numbers with decimals. |
 
@@ -412,6 +417,24 @@ Steps:
 
 ---
 
+## 8.5 Phase 6.5 — 2B capability iteration (`TRAINING_PLAN.md`)
+
+Iteration 1 passed the Phase 6 rule checks, but our evaluation and research analysis ([research/analysis.md](research/analysis.md)) revealed three capability gaps before release:
+1. **Short, unsubstantiated answers**: average length was 30.7 words (only 18.7% in the target length band), and judge usefulness was **1.87 / 5.0**.
+2. **Risk-averse diary voice**: flat `-1.0` penalties pushed the policy toward vague first-person sentences (51.3% of outputs) that avoid making concrete tactical claims.
+3. **No reasoning scratchpad**: empty `<think>` tags forced the 2B model to select facts and write coaching prose in a single pass.
+
+Before we run Phase 7 human ratings, we execute the 6-stage capability iteration in [TRAINING_PLAN.md](TRAINING_PLAN.md):
+- **Stage T0 (Eval & Dev Split)**: build the 150-item stratified dev set (`eval/devset-1.0.jsonl`), de-bias the judge prompt for length, add Length-Controlled Win Rate (`eval/lc_winrate.py`), and calibrate on 60 human-scored items.
+- **Stage T1 (Motif Facts & Claim Verifier)**: add deterministic fork, pin, skewer, discovered attack, and mate-threat facts in Python and TypeScript, and add relational/opening/voice checks in `rewards/claims.py`.
+- **Stage T2 (Engine-Grounded Teacher Distillation)**: synthesize 6,000–8,000 verified coaching traces (including 30% `detail: long` and structured `<think>` checklists) using an Apache 2.0 open-weight teacher model + rule-check rejection sampling.
+- **Stage T3 (SFT v2 Ablations)**: test data mix, dataset size, and adapter capacity (LoRA r32 vs r64 vs Full Fine-Tuning) on the dev set.
+- **Stage T4 (Reward v2 & GRPO v2)**: replace flat `-1.0` penalties with graded penalties and multiplicative correct-only length scaling (GR3), and train with token-level DAPO/GDPO (`loss_type="dapo"`, 8 prompts/step).
+- **Stage T5 (Reasoning Mode & Latency Sweep)**: benchmark `Fast` (`0` thinking tokens) vs `Thinking` (`32–128` structured `<think>` tokens and client-side rule-check retry) to find the optimal intelligence-per-second operating point.
+- **Stage T6 (Final Frozen Test Gate)**: verify that the upgraded 2B model passes all exit targets in [TRAINING_PLAN.md Section 3](TRAINING_PLAN.md#3-target-metrics-and-gateways-to-exit-iteration-into-phase-7) (Hard-Fail ≤ 5.0%, In-Band Length ≥ 80.0%, Judge Usefulness ≥ 3.60, Judge Overall ≥ 3.80) on `eval/testset-1.0.jsonl`.
+
+---
+
 ## 9. Phase 7 — Eval and human ratings for 2B
 
 1. Run the full Phase 4 report on the chosen checkpoint.
@@ -499,7 +522,8 @@ flowchart LR
 - **Explain this move:** the move on screen → engine → facts → prompt → model → text appears word by word (streaming).
 - **Review game:** analyse every move with local Stockfish (with a progress bar). Find the key moments. Explain each one. Show a clickable list. A click jumps to that move on the Lichess board, if possible, or shows a small board in the panel.
 - **More detail:** reruns with `detail: long`.
-- **Settings:** level (beginner/club), model (2B/0.8B), cloud eval on/off, delete model.
+- **Reasoning mode (`Fast` vs `Thinking`):** users can switch between instant streaming (`Fast`, 0 thinking tokens) and deeper analysis (`Thinking`, where the model plans inside `<think>...</think>` for ~2–5 seconds before streaming the answer, with a collapsible `"Show reasoning"` drawer and optional client-side rule check retry). The exact token budget comes from the Stage T5 Pareto sweep in [TRAINING_PLAN.md](TRAINING_PLAN.md).
+- **Settings:** level (beginner/club), reasoning mode (`Fast` / `Thinking`), model (2B/0.8B), cloud eval on/off, delete model.
 - **Ratings:** a thumbs up/down under each explanation. Saved in `chrome.storage.local` with the prompt and the output. An "Export ratings" button saves a JSON file.
 
 ### 9.7 Testing
@@ -573,8 +597,11 @@ flowchart LR
 second/
 ├── LICENSE                  # Apache 2.0 (everything except extension/)
 ├── README.md
+├── PLAN.md                  # Master project plan (Phases 0–12)
+├── TRAINING_PLAN.md         # Phase 6.5 agent execution plan for 2B capability iteration
+├── research/                # Formatted Deep Research reports + critical analysis.md
 ├── docs/
-│   ├── decisions/           # runtime.md, compute.md, ...
+│   ├── decisions/           # runtime.md, compute.md, teacher_model.md, ...
 │   ├── data_sources.md
 │   └── prompt_format.md     # The input contract
 ├── core/
@@ -583,17 +610,20 @@ second/
 │   └── golden/              # Parity test files
 ├── data/
 │   ├── sources/             # One script per source
-│   ├── pipeline/            # Analyse, filter, label, split
+│   ├── pipeline/            # Analyse, filter, teacher synthesis, label, split
 │   └── cards/               # Dataset cards
-├── rewards/                 # Rule checks (used by RL and eval)
+├── rewards/                 # Rule checks and claim verifiers (used by RL and eval)
 ├── training/
 │   ├── sft.ipynb
 │   ├── grpo.ipynb
 │   └── configs/             # One YAML file per model size and version
 ├── eval/
-│   ├── testset-1.0.jsonl
+│   ├── devset-1.0.jsonl     # 150-item dev set for inner-loop ablations
+│   ├── testset-1.0.jsonl    # 300-item frozen test set
 │   ├── run_eval.py
 │   ├── judge.py
+│   ├── lc_winrate.py        # Length-Controlled Win Rate
+│   ├── sweep_reasoning.py   # Reasoning mode Pareto sweep
 │   ├── rating_space/        # Gradio app for the human ratings
 │   ├── results/
 │   └── reports/
@@ -604,7 +634,7 @@ second/
 │   ├── public/
 │   ├── manifest.json
 │   └── TESTING.md
-├── spikes/                  # Phase 0 experiments
+├── spikes/                  # Phase 0 and teacher selection experiments
 └── .github/workflows/       # Tests for Python, TS, golden parity
 ```
 
@@ -613,7 +643,7 @@ second/
 ## 16. Compute budget (estimates)
 
 > [!NOTE]
-> Updated after Phase 0.3 with empirical benchmarks on NVIDIA L4 GPU.
+> Updated after Phase 0.3, Phase 5, Phase 6, and Phase 6.5 (`TRAINING_PLAN.md`) with empirical benchmarks on NVIDIA L4 GPU.
 
 Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 
@@ -621,14 +651,19 @@ Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 |---|---|---|---|---|
 | Phase 0 tests | L4 (Colab) | 0.5 | 1.2 | Verified |
 | Stockfish analysis | Local CPU (4 threads) | 1.48 | 0 | Verified |
-| SFT 2B (1,000 steps) | L4 (Colab) | 0.31 | 0.8 | Verified |
-| GRPO 2B (500 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
-| Eval runs (several) | L4 (Colab) | 1.50 | 3.8 | Projected |
-| **Second-1.0-2B training + eval (GPU)** | L4 (Colab) | **3.46** | **8.7** | **Within 200 unit monthly budget** |
-| **All Phase 0–7 jobs (GPU + CPU)** | | **5.44** | **9.9** | **Within 200 unit monthly budget** |
-| 0.8B (SFT + GRPO) | L4 (Colab) | ~1.0 | ~2.5 | Projected |
-| 4B (SFT + GRPO) | L4 or A100 | ~6–10 | ~20–35 | Projected |
-| 9B (SFT + GRPO) | A100 | ~15–20 | ~90–150 | Projected |
+| SFT 2B Iteration 1 (1,000 steps) | L4 (Colab) | 0.31 | 0.8 | Verified |
+| GRPO 2B Iteration 1 (450 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
+| Iteration 1 Eval runs | L4 (Colab) | 1.50 | 3.8 | Verified |
+| **Iteration 1 Subtotal (Phases 0–6)** | **L4 + Local CPU** | **5.44** | **9.9** | **Completed** |
+| Phase 6.5 Stage T2 (Teacher spike + 8k synthesis) | L4 / A100 (Colab) | ~4.3 | ~12.5 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
+| Phase 6.5 Stage T3 (SFT v2 ablations, 6 runs) | L4 / A100 (Colab) | ~2.5 | ~8.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
+| Phase 6.5 Stage T4 (GRPO v2 ablations + best run) | L4 / A100 (Colab) | ~4.5 | ~14.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
+| Phase 6.5 Stages T5–T6 (Reasoning sweep + Final test) | L4 (Colab) | ~2.0 | ~5.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
+| **Phase 6.5 Iteration 2 Subtotal** | **L4 / A100 (Colab)** | **~13.3** | **~39.5** | **Planned** |
+| **All Phase 0–7 jobs (Iteration 1 + Iteration 2)** | | **~18.74** | **~49.4** | **Within 200 unit monthly budget** |
+| 0.8B (SFT v2 + GRPO v2) | L4 (Colab) | ~2.0 | ~5.0 | Projected |
+| 4B (SFT v2 + GRPO v2) | L4 or A100 | ~6–10 | ~20–35 | Projected |
+| 9B (SFT v2 + GRPO v2) | A100 | ~15–20 | ~90–150 | Projected |
 
 **Colab rules for every run:**
 - Save checkpoints to Drive often.
