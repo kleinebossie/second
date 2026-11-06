@@ -401,6 +401,15 @@ Steps:
 - Robotic text: every answer starts the same way. Fix: add a check for repeated openings, or add a small local judge later.
 - Reward hacking: see section 3.4.
 
+> [!NOTE]
+> **Phase 6 Completed (2026-11-06)**:
+> - Model trained for 450 steps on NVIDIA L4 GPU. Best checkpoint selected: `checkpoint-300`.
+> - Test mean reward reached **0.5428** (vs **0.4772** SFT baseline).
+> - Test hard-fail rate decreased to **7.7%** (vs **11.3%** SFT baseline and **100.0%** base Qwen 2B).
+> - Test format pass rate reached **100.0%** (>95.0% required).
+> - Full Gemini 3.5 Flash Lite judge evaluated on all 300 test items across 3 opponents. Head-to-head vs SFT: GRPO won 53, lost 50, tied 197 (83.3% win+tie rate).
+> - Anti-hacking audit and 20 sample reviews documented in [grpo-1.0-2b.md](eval/reports/grpo-1.0-2b.md).
+
 ---
 
 ## 9. Phase 7 — Eval and human ratings for 2B

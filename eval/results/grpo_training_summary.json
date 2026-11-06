@@ -1,0 +1,103 @@
+{
+  "model_id": "Qwen/Qwen3.5-2B",
+  "sft_adapter_path": "/content/drive/MyDrive/second/checkpoints/sft-1.0-2b/final_adapter",
+  "best_checkpoint": "checkpoint-300",
+  "top_3_checkpoints": [
+    "checkpoint-300",
+    "checkpoint-100",
+    "checkpoint-400"
+  ],
+  "global_steps": 450,
+  "train_loss": -0.013907025158405304,
+  "beta": 0.02,
+  "learning_rate": 5e-06,
+  "num_generations": 8,
+  "temperature": 0.9,
+  "training_time_minutes": 60.49,
+  "step_logs": [
+    {
+      "step": 50,
+      "sample_count": 400,
+      "length_collapse": false,
+      "robotic_text": false,
+      "high_hard_fail": false,
+      "avg_word_count": 25.18,
+      "hard_fail_rate": 27.25,
+      "mean_reward": 0.2466,
+      "top_opening_prefix": "move the piece to",
+      "top_opening_share": 0.0125
+    },
+    {
+      "step": 50,
+      "checkpoint": "checkpoint-50",
+      "mean_reward": 0.6192,
+      "hard_fail_rate": 5.11,
+      "avg_word_count": 15.9,
+      "pct_in_band": 13.14
+    },
+    {
+      "step": 100,
+      "checkpoint": "checkpoint-100",
+      "mean_reward": 0.6721,
+      "hard_fail_rate": 2.19,
+      "avg_word_count": 18.89,
+      "pct_in_band": 16.79
+    },
+    {
+      "step": 150,
+      "checkpoint": "checkpoint-150",
+      "mean_reward": 0.6563,
+      "hard_fail_rate": 2.92,
+      "avg_word_count": 16.45,
+      "pct_in_band": 16.06
+    },
+    {
+      "step": 200,
+      "checkpoint": "checkpoint-200",
+      "mean_reward": 0.6617,
+      "hard_fail_rate": 2.92,
+      "avg_word_count": 16.91,
+      "pct_in_band": 13.87
+    },
+    {
+      "step": 250,
+      "checkpoint": "checkpoint-250",
+      "mean_reward": 0.6445,
+      "hard_fail_rate": 4.38,
+      "avg_word_count": 19.15,
+      "pct_in_band": 16.06
+    },
+    {
+      "step": 300,
+      "checkpoint": "checkpoint-300",
+      "mean_reward": 0.6723,
+      "hard_fail_rate": 2.92,
+      "avg_word_count": 17.9,
+      "pct_in_band": 19.71
+    },
+    {
+      "step": 350,
+      "checkpoint": "checkpoint-350",
+      "mean_reward": 0.65,
+      "hard_fail_rate": 4.38,
+      "avg_word_count": 18.5,
+      "pct_in_band": 19.71
+    },
+    {
+      "step": 400,
+      "checkpoint": "checkpoint-400",
+      "mean_reward": 0.6619,
+      "hard_fail_rate": 4.38,
+      "avg_word_count": 19.22,
+      "pct_in_band": 21.17
+    },
+    {
+      "step": 450,
+      "checkpoint": "checkpoint-450",
+      "mean_reward": 0.6441,
+      "hard_fail_rate": 5.11,
+      "avg_word_count": 21.77,
+      "pct_in_band": 22.63
+    }
+  ]
+}
