@@ -37,12 +37,23 @@ sft:
   checkpoint_dir: "/content/drive/MyDrive/second/checkpoints/sft-1.0-2b"
 
 grpo:
+  sft_adapter_dir: "/content/drive/MyDrive/second/checkpoints/sft-1.0-2b/final_adapter"
+  rl_prompts_path: "data/processed/rl_prompts.jsonl"
+  val_data_path: "data/processed/sft_val.jsonl"
+  testset_path: "eval/testset-1.0.jsonl"
   num_generations: 8
   max_completion_length: 300
+  max_prompt_length: 512
   temperature: 0.9
   learning_rate: 0.000005
   beta: 0.02
   max_steps: 500
+  warmup_steps: 50
   save_steps: 50
+  eval_steps: 50
+  logging_steps: 10
+  save_total_limit: 3
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 1
   gpu: "L4"
   checkpoint_dir: "/content/drive/MyDrive/second/checkpoints/grpo-1.0-2b"

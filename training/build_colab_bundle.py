@@ -1,8 +1,9 @@
-"""Build archive bundle for Google Colab SFT training.
+"""Build archive bundle for Google Colab SFT and GRPO training.
 
 This script packages dataset splits, frozen test sets, baselines, and code.
-It creates a compressed zip archive at data/processed/phase5_colab_bundle.zip.
-Google Colab loads this bundle to execute Phase 5 training and evaluation.
+It creates compressed zip archives at data/processed/phase5_colab_bundle.zip
+and data/processed/phase6_colab_bundle.zip.
+Google Colab loads this bundle to execute Phase 5 or Phase 6 training and evaluation.
 All docstrings follow ASD-STE100 Simplified Technical English.
 """
 
@@ -16,12 +17,22 @@ import zipfile
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_ZIP = Path("data/processed/phase5_colab_bundle.zip")
+DEFAULT_PHASE6_OUTPUT_ZIP = Path("data/processed/phase6_colab_bundle.zip")
 
 REQUIRED_DATA_FILES: list[str] = [
     "data/processed/sft_train.jsonl",
     "data/processed/sft_val.jsonl",
     "eval/testset-1.0.jsonl",
     "eval/results/baselines/base-qwen-2b.jsonl",
+]
+
+PHASE6_REQUIRED_DATA_FILES: list[str] = [
+    "data/processed/rl_prompts.jsonl",
+    "data/processed/sft_val.jsonl",
+    "eval/testset-1.0.jsonl",
+    "eval/results/sft-1.0-2b_outputs.jsonl",
+    "eval/results/baselines/base-qwen-2b.jsonl",
+    "eval/results/baselines/gemini-flash.jsonl",
 ]
 
 OPTIONAL_CONFIG_FILES: list[str] = [
@@ -36,7 +47,10 @@ CODE_DIRECTORIES: list[str] = [
 ]
 
 
-def collect_bundle_files(repo_root: Path) -> list[tuple[Path, str]]:
+def collect_bundle_files(
+    repo_root: Path,
+    phase: int = 5,
+) -> list[tuple[Path, str]]:
     """Find all files needed for the Colab training bundle.
 
     Collect data splits, baseline records, configuration files, and Python source code.
@@ -44,9 +58,10 @@ def collect_bundle_files(repo_root: Path) -> list[tuple[Path, str]]:
     Return list of tuples with absolute source path and relative archive path.
     """
     entries: list[tuple[Path, str]] = []
+    data_files = PHASE6_REQUIRED_DATA_FILES if phase == 6 else REQUIRED_DATA_FILES
 
     # 1. Collect required data files
-    for rel_path in REQUIRED_DATA_FILES:
+    for rel_path in data_files:
         full_path = repo_root / rel_path
         if full_path.is_file():
             entries.append((full_path, rel_path))
@@ -76,6 +91,7 @@ def collect_bundle_files(repo_root: Path) -> list[tuple[Path, str]]:
 def build_colab_bundle(
     output_path: str | Path = DEFAULT_OUTPUT_ZIP,
     repo_root: str | Path | None = None,
+    phase: int = 5,
 ) -> Path:
     """Create the Colab zip archive.
 
@@ -87,7 +103,7 @@ def build_colab_bundle(
     root = Path(repo_root).resolve() if repo_root else Path.cwd()
 
     out_file.parent.mkdir(parents=True, exist_ok=True)
-    file_entries = collect_bundle_files(root)
+    file_entries = collect_bundle_files(root, phase=phase)
 
     LOGGER.info("Packaging %d files into %s...", len(file_entries), out_file)
     with zipfile.ZipFile(out_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -99,19 +115,47 @@ def build_colab_bundle(
     return out_file
 
 
+def build_phase6_colab_bundle(
+    output_path: str | Path = DEFAULT_PHASE6_OUTPUT_ZIP,
+    repo_root: str | Path | None = None,
+) -> Path:
+    """Create the Phase 6 GRPO Colab zip archive.
+
+    Package RL prompts, validation split, test set, baselines, and source code.
+    Return path to created zip archive.
+    """
+    return build_colab_bundle(
+        output_path=output_path,
+        repo_root=repo_root,
+        phase=6,
+    )
+
+
 def main() -> None:
     """CLI entry point for building the Colab bundle."""
-    parser = argparse.ArgumentParser(description="Build Phase 5 Colab bundle zip.")
+    parser = argparse.ArgumentParser(description="Build Colab bundle zip for Phase 5 or Phase 6.")
+    parser.add_argument(
+        "--phase",
+        type=int,
+        choices=[5, 6],
+        default=6,
+        help="Target training phase (5 for SFT, 6 for GRPO)",
+    )
     parser.add_argument(
         "--output",
         type=str,
-        default=str(DEFAULT_OUTPUT_ZIP),
+        default=None,
         help="Target zip file path",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    bundle_path = build_colab_bundle(output_path=args.output)
+    if args.output:
+        target_out = Path(args.output)
+    else:
+        target_out = DEFAULT_PHASE6_OUTPUT_ZIP if args.phase == 6 else DEFAULT_OUTPUT_ZIP
+
+    bundle_path = build_colab_bundle(output_path=target_out, phase=args.phase)
     print(f"Colab bundle built: {bundle_path} ({bundle_path.stat().st_size / (1024*1024):.2f} MB)")
 
 

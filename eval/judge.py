@@ -8,6 +8,7 @@ It caches API responses to prevent duplicate calls.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 import hashlib
 import json
@@ -15,6 +16,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import threading
 import time
 from typing import Any
 
@@ -100,6 +102,7 @@ class JudgeCache:
         """Initialize cache store from a JSONL file path."""
         self.path = Path(cache_path)
         self._cache: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -107,21 +110,23 @@ class JudgeCache:
         if not self.path.exists():
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line_str = line.strip()
-                    if line_str:
-                        record = json.loads(line_str)
-                        k = record.get("key")
-                        resp = record.get("response")
-                        if k and resp is not None:
-                            self._cache[k] = resp
+            with self._lock:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line_str = line.strip()
+                        if line_str:
+                            record = json.loads(line_str)
+                            k = record.get("key")
+                            resp = record.get("response")
+                            if k and resp is not None:
+                                self._cache[k] = resp
         except Exception as exc:
             LOGGER.warning("Failed to load judge cache from %s: %s", self.path, exc)
 
     def get(self, key: str) -> dict[str, Any] | None:
         """Return cached response dict or None."""
-        return self._cache.get(key)
+        with self._lock:
+            return self._cache.get(key)
 
     def set(
         self,
@@ -130,16 +135,17 @@ class JudgeCache:
         meta: dict[str, Any] | None = None,
     ) -> None:
         """Store response in memory and append entry to disk."""
-        self._cache[key] = response
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        record = {
-            "key": key,
-            "response": response,
-            "meta": meta or {},
-            "timestamp": time.time(),
-        }
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "\n")
+        with self._lock:
+            self._cache[key] = response
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "key": key,
+                "response": response,
+                "meta": meta or {},
+                "timestamp": time.time(),
+            }
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
 
 
 def extract_json_from_text(text: str) -> dict[str, Any]:
@@ -405,6 +411,7 @@ class GeminiJudge:
     def score_rubric_batch(
         self,
         records: list[dict[str, Any]],
+        max_workers: int = 5,
     ) -> tuple[RubricSummary, list[dict[str, Any]]]:
         """Score a collection of completions using the rubric judge.
 
@@ -415,8 +422,7 @@ class GeminiJudge:
             empty_summary = RubricSummary(0.0, 0.0, 0.0, 0.0, 0.0, 0)
             return empty_summary, []
 
-        scores: list[dict[str, Any]] = []
-        for rec in records:
+        def _score_one(rec: dict[str, Any]) -> dict[str, Any]:
             item_id = str(rec.get("id", "unknown"))
             prompt_str = ensure_prompt_text(rec)
             level = str(rec.get("level", "club"))
@@ -431,7 +437,13 @@ class GeminiJudge:
             )
             score_dict = score.to_dict()
             score_dict["id"] = item_id
-            scores.append(score_dict)
+            return score_dict
+
+        if max_workers > 1 and len(records) > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                scores = list(executor.map(_score_one, records))
+        else:
+            scores = [_score_one(rec) for rec in records]
 
         count = len(scores)
         mean_correctness = round(sum(s["correctness"] for s in scores) / count, 2)
@@ -565,6 +577,7 @@ class GeminiJudge:
         self,
         pairs: list[dict[str, Any]],
         opponent_name: str,
+        max_workers: int = 5,
     ) -> tuple[PairwiseSummary, list[PairwiseComparison]]:
         """Run swap-consistent pairwise evaluation against one opponent.
 
@@ -585,22 +598,26 @@ class GeminiJudge:
             )
             return empty_summary, []
 
-        results: list[PairwiseComparison] = []
-        for pair in pairs:
+        def _compare_one(pair: dict[str, Any]) -> PairwiseComparison:
             item_id = str(pair.get("id", "unknown"))
             prompt_str = ensure_prompt_text(pair)
             level = str(pair.get("level", "club"))
             cand = clean_completion_text(str(pair.get("candidate", "")))
             opp = clean_completion_text(str(pair.get("opponent", "")))
 
-            comp = self.compare_pair(
+            return self.compare_pair(
                 prompt_text=prompt_str,
                 level=level,
                 candidate_text=cand,
                 opponent_text=opp,
                 item_id=item_id,
             )
-            results.append(comp)
+
+        if max_workers > 1 and len(pairs) > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(_compare_one, pairs))
+        else:
+            results = [_compare_one(pair) for pair in pairs]
 
         total = len(results)
         w = sum(1 for r in results if r.winner == "candidate")
@@ -631,6 +648,7 @@ def run_judge_eval(
     judge_model: str = DEFAULT_JUDGE_MODEL,
     cache_path: Path | str = DEFAULT_CACHE_PATH,
     api_key: str | None = None,
+    max_workers: int = 5,
 ) -> dict[str, Any]:
     """Execute complete judge evaluation for a model.
 
@@ -644,7 +662,7 @@ def run_judge_eval(
         cache_path=cache_path,
     )
 
-    rubric_summary, rubric_items = judge.score_rubric_batch(candidate_records)
+    rubric_summary, rubric_items = judge.score_rubric_batch(candidate_records, max_workers=max_workers)
 
     pairwise_summaries: dict[str, dict[str, Any]] = {}
     pairwise_details: dict[str, list[dict[str, Any]]] = {}
@@ -667,7 +685,9 @@ def run_judge_eval(
                     })
 
             if matched_pairs:
-                summary, comps = judge.compare_opponent_batch(matched_pairs, opp_name)
+                summary, comps = judge.compare_opponent_batch(
+                    matched_pairs, opp_name, max_workers=max_workers
+                )
                 pairwise_summaries[opp_name] = summary.to_dict()
                 pairwise_details[opp_name] = [c.to_dict() for c in comps]
 
