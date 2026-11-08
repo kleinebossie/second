@@ -1,0 +1,37 @@
+# Recipe configuration for Second-1.0-2B Stage T3 SFT v2 (SFT-A4: High-Capacity LoRA)
+model_name: "Second-1.0-2B-SFT-v2-A4"
+version: "2.0"
+size: "2B"
+base_model: "Qwen/Qwen3.5-2B"
+
+mode:
+  text_only: true
+  enable_thinking: false
+
+sft:
+  method: "lora"
+  lora_r: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  target_modules: "all-linear"
+  train_data_path: "data/processed/sft_v2_train.jsonl"
+  val_data_path: "data/processed/sft_val.jsonl"
+  devset_path: "eval/devset-1.0.jsonl"
+  max_examples: 10000
+  num_train_epochs: 2
+  learning_rate: 0.00005
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  max_seq_length: 1024
+  loss_on_answer_only: true
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 2
+  save_strategy: "steps"
+  save_steps: 200
+  eval_strategy: "steps"
+  eval_steps: 200
+  logging_steps: 25
+  bf16: true
+  gpu: "L4"
+  checkpoint_dir: "/content/drive/MyDrive/second/checkpoints/sft_v2_a4"
