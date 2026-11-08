@@ -1,0 +1,1232 @@
+[
+  {
+    "id": 0,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "r3k2r/ppp2ppp/8/3N4/8/8/PPP2PPP/R1B1K2R w KQkq - 0 1",
+    "move_uci": "d5c7",
+    "eval_before": {
+      "fen": "r3k2r/ppp2ppp/8/3N4/8/8/PPP2PPP/R1B1K2R w KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 350
+          },
+          "moves": [
+            "d5c7",
+            "e8d8",
+            "c7a8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r3k2r/ppN2ppp/8/8/8/8/PPP2PPP/R1B1K2R b KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 350
+          },
+          "moves": [
+            "e8d8",
+            "c7a8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r3k2r/ppp2ppp/8/3N4/8/8/PPP2PPP/R1B1K2R w KQkq - 0 1\nWhite to move, move 1.\nMove played: Nxc7+.\nVerdict: Best.\nWhite's winning chances: 78% → 78%.\nBest move: Nxc7+.\nBest line: Nxc7+ Kd8 Nxa8.\nFacts:\n- After Nxc7+, Black's best reply is Kd8.\n- Nxc7+ forks the king on e8 and the rook on a8.\n- The rook on a8 is not defended.\n- Black king is in check on e8.\n- White is up a rook and two pawns in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r3k2r/ppp2ppp/8/3N4/8/8/PPP2PPP/R1B1K2R w KQkq - 0 1\nWhite to move, move 1.\nMove played: Nxc7+.\nVerdict: Best.\nWhite's winning chances: 78% → 78%.\nBest move: Nxc7+.\nBest line: Nxc7+ Kd8 Nxa8.\nFacts:\n- After Nxc7+, Black's best reply is Kd8.\n- Nxc7+ forks the king on e8 and the rook on a8.\n- The rook on a8 is not defended.\n- Black king is in check on e8.\n- White is up a rook and two pawns in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "fork_knight_king_rook"
+  },
+  {
+    "id": 1,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "r1bqk2r/ppp2ppp/3b1n2/8/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 1",
+    "move_uci": "e4e5",
+    "eval_before": {
+      "fen": "r1bqk2r/ppp2ppp/3b1n2/8/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 250
+          },
+          "moves": [
+            "e4e5",
+            "d6e5",
+            "d1d8",
+            "e8d8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1bqk2r/ppp2ppp/3b1n2/4P3/8/2N5/PPP2PPP/R1BQKB1R b KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 250
+          },
+          "moves": [
+            "d6e5",
+            "d1d8",
+            "e8d8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqk2r/ppp2ppp/3b1n2/8/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 1\nWhite to move, move 1.\nMove played: e5.\nVerdict: Best.\nWhite's winning chances: 72% → 72%.\nBest move: e5.\nBest line: e5 Bxe5 Qxd8+ Kxd8.\nFacts:\n- e5 attacks the bishop on d6 together with the queen on d1.\n- After e5, Black's best reply is Bxe5.\n- After e5, Black captures the pawn on e5 with Bxe5.\n- e5 forks the bishop on d6 and the knight on f6.\n- White threatens exd6.\n- White is up a pawn.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqk2r/ppp2ppp/3b1n2/8/4P3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 1\nWhite to move, move 1.\nMove played: e5.\nVerdict: Best.\nWhite's winning chances: 72% → 72%.\nBest move: e5.\nBest line: e5 Bxe5 Qxd8+ Kxd8.\nFacts:\n- e5 attacks the bishop on d6 together with the queen on d1.\n- After e5, Black's best reply is Bxe5.\n- After e5, Black captures the pawn on e5 with Bxe5.\n- e5 forks the bishop on d6 and the knight on f6.\n- White threatens exd6.\n- White is up a pawn.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "fork_pawn_minors"
+  },
+  {
+    "id": 2,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "4k3/8/8/8/4b3/8/PP2PPPP/RNBQ1RK1 w - - 0 1",
+    "move_uci": "d1a4",
+    "eval_before": {
+      "fen": "4k3/8/8/8/4b3/8/PP2PPPP/RNBQ1RK1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "d1a4",
+            "e8f7",
+            "a4e4"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4k3/8/8/8/Q3b3/8/PP2PPPP/RNB2RK1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "e8f7",
+            "a4e4"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4k3/8/8/8/4b3/8/PP2PPPP/RNBQ1RK1 w - - 0 1\nWhite to move, move 1.\nMove played: Qa4+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Qa4+.\nBest line: Qa4+ Kf7 Qxe4.\nFacts:\n- After Qa4+, Black's best reply is Kf7.\n- Qa4+ forks the king on e8 and the bishop on e4.\n- The bishop on e4 is not defended.\n- Black king is in check on e8.\n- White is up a queen in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4k3/8/8/8/4b3/8/PP2PPPP/RNBQ1RK1 w - - 0 1\nWhite to move, move 1.\nMove played: Qa4+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Qa4+.\nBest line: Qa4+ Kf7 Qxe4.\nFacts:\n- After Qa4+, Black's best reply is Kf7.\n- Qa4+ forks the king on e8 and the bishop on e4.\n- The bishop on e4 is not defended.\n- Black king is in check on e8.\n- White is up a queen in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "fork_queen_king_bishop"
+  },
+  {
+    "id": 3,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "r3k2r/ppp2ppp/8/8/3n4/8/PPP1NPPP/R3K2R w KQkq - 0 1",
+    "move_uci": "h2h3",
+    "eval_before": {
+      "fen": "r3k2r/ppp2ppp/8/8/3n4/8/PPP1NPPP/R3K2R w KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 0
+          },
+          "moves": [
+            "e2d4"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r3k2r/ppp2ppp/8/8/3n4/7P/PPP1NPP1/R3K2R b KQkq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -350
+          },
+          "moves": [
+            "d4c2",
+            "e1d1",
+            "c2a1"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: r3k2r/ppp2ppp/8/8/3n4/8/PPP1NPPP/R3K2R w KQkq - 0 1\nWhite to move, move 1.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 22%.\nBest move: Nxd4.\nBest line: Nxd4.\nFacts:\n- After h3, Black's best reply is Nxc2+.\n- After h3, Black captures the pawn on c2 with Nxc2+.\n- Nxc2+ forks the king on e1 and the rook on a1.\n- Best move Nxd4 captures the knight on d4.\n- The knight on d4 is not defended.\n- Black has a check: Nxc2+.\n- Black can capture the knight on e2 with Nxe2.\n- White threatens Nxd4.\n- Material: equal.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: r3k2r/ppp2ppp/8/8/3n4/8/PPP1NPPP/R3K2R w KQkq - 0 1\nWhite to move, move 1.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 22%.\nBest move: Nxd4.\nBest line: Nxd4.\nFacts:\n- After h3, Black's best reply is Nxc2+.\n- After h3, Black captures the pawn on c2 with Nxc2+.\n- Nxc2+ forks the king on e1 and the rook on a1.\n- Best move Nxd4 captures the knight on d4.\n- The knight on d4 is not defended.\n- Black has a check: Nxc2+.\n- Black can capture the knight on e2 with Nxe2.\n- White threatens Nxd4.\n- Material: equal.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "fork_reply_knight"
+  },
+  {
+    "id": 4,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "5k2/b6n/8/8/8/8/8/4R2K w - - 0 1",
+    "move_uci": "e1e7",
+    "eval_before": {
+      "fen": "5k2/b6n/8/8/8/8/8/4R2K w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "e1e7",
+            "f8g8",
+            "e7a7"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "5k2/b3R2n/8/8/8/8/8/7K b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "f8g8",
+            "e7a7"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 5k2/b6n/8/8/8/8/8/4R2K w - - 0 1\nWhite to move, move 1.\nMove played: Re7.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Re7.\nBest line: Re7 Kg8 Rxa7.\nFacts:\n- Re7 attacks the bishop on a7.\n- After Re7, Black's best reply is Kg8.\n- Re7 forks the bishop on a7 and the knight on h7.\n- The bishop on a7 is not defended.\n- The rook on e7 is not defended.\n- Black can capture the rook on e7 with Kxe7.\n- White threatens Rxa7.\n- Black is up a pawn in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 5k2/b6n/8/8/8/8/8/4R2K w - - 0 1\nWhite to move, move 1.\nMove played: Re7.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Re7.\nBest line: Re7 Kg8 Rxa7.\nFacts:\n- Re7 attacks the bishop on a7.\n- After Re7, Black's best reply is Kg8.\n- Re7 forks the bishop on a7 and the knight on h7.\n- The bishop on a7 is not defended.\n- The rook on e7 is not defended.\n- Black can capture the rook on e7 with Kxe7.\n- White threatens Rxa7.\n- Black is up a pawn in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "fork_rook_minors"
+  },
+  {
+    "id": 5,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "r1bqkbnr/ppp2ppp/2np4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4",
+    "move_uci": "f1b5",
+    "eval_before": {
+      "fen": "r1bqkbnr/ppp2ppp/2np4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 40
+          },
+          "moves": [
+            "f1b5",
+            "a7a6",
+            "b5a4"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1bqkbnr/ppp2ppp/2np4/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 1 4",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 40
+          },
+          "moves": [
+            "a7a6",
+            "b5a4"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkbnr/ppp2ppp/2np4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4\nWhite to move, move 4.\nMove played: Bb5.\nVerdict: Best.\nWhite's winning chances: 54% → 54%.\nBest move: Bb5.\nBest line: Bb5 a6 Ba4.\nFacts:\n- Bb5 attacks the knight on c6.\n- After Bb5, Black's best reply is a6.\n- Bb5 pins the knight on c6 to the king on e8.\n- Material: equal.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkbnr/ppp2ppp/2np4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4\nWhite to move, move 4.\nMove played: Bb5.\nVerdict: Best.\nWhite's winning chances: 54% → 54%.\nBest move: Bb5.\nBest line: Bb5 a6 Ba4.\nFacts:\n- Bb5 attacks the knight on c6.\n- After Bb5, Black's best reply is a6.\n- Bb5 pins the knight on c6 to the king on e8.\n- Material: equal.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "pin_absolute_bishop_king"
+  },
+  {
+    "id": 6,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "r1b1k2r/ppp1qppp/2np1n2/4p3/4P3/3P1N2/PPP1BPPP/RNBQK2R w KQkq - 0 6",
+    "move_uci": "c1g5",
+    "eval_before": {
+      "fen": "r1b1k2r/ppp1qppp/2np1n2/4p3/4P3/3P1N2/PPP1BPPP/RNBQK2R w KQkq - 0 6",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 30
+          },
+          "moves": [
+            "c1g5",
+            "h7h6"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1b1k2r/ppp1qppp/2np1n2/4p1B1/4P3/3P1N2/PPP1BPPP/RN1QK2R b KQkq - 1 6",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 30
+          },
+          "moves": [
+            "h7h6",
+            "g5f6"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: r1b1k2r/ppp1qppp/2np1n2/4p3/4P3/3P1N2/PPP1BPPP/RNBQK2R w KQkq - 0 6\nWhite to move, move 6.\nMove played: Bg5.\nVerdict: Best.\nWhite's winning chances: 53% → 53%.\nBest move: Bg5.\nBest line: Bg5 h6.\nFacts:\n- Bg5 attacks the knight on f6.\n- After Bg5, Black's best reply is h6.\n- Bg5 pins the knight on f6 to the queen on e7.\n- White is up a bishop.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: r1b1k2r/ppp1qppp/2np1n2/4p3/4P3/3P1N2/PPP1BPPP/RNBQK2R w KQkq - 0 6\nWhite to move, move 6.\nMove played: Bg5.\nVerdict: Best.\nWhite's winning chances: 53% → 53%.\nBest move: Bg5.\nBest line: Bg5 h6.\nFacts:\n- Bg5 attacks the knight on f6.\n- After Bg5, Black's best reply is h6.\n- Bg5 pins the knight on f6 to the queen on e7.\n- White is up a bishop.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "pin_relative_bishop_queen"
+  },
+  {
+    "id": 7,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "4k3/8/8/4n3/8/8/8/R5K1 w - - 0 1",
+    "move_uci": "a1e1",
+    "eval_before": {
+      "fen": "4k3/8/8/4n3/8/8/8/R5K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "a1e1",
+            "e8d7",
+            "e1e5"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4k3/8/8/4n3/8/8/8/4R1K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "e8d7",
+            "e1e5"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: 4k3/8/8/4n3/8/8/8/R5K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re1.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Re1.\nBest line: Re1 Kd7 Rxe5.\nFacts:\n- Re1 attacks the knight on e5.\n- After Re1, Black's best reply is Kd7.\n- Re1 pins the knight on e5 to the king on e8.\n- The knight on e5 is not defended.\n- White threatens Rxe5+.\n- White is up the exchange.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: 4k3/8/8/4n3/8/8/8/R5K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re1.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Re1.\nBest line: Re1 Kd7 Rxe5.\nFacts:\n- Re1 attacks the knight on e5.\n- After Re1, Black's best reply is Kd7.\n- Re1 pins the knight on e5 to the king on e8.\n- The knight on e5 is not defended.\n- White threatens Rxe5+.\n- White is up the exchange.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "pin_absolute_rook_king"
+  },
+  {
+    "id": 8,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "3qk3/8/8/3b4/8/8/8/R3K3 w Q - 0 1",
+    "move_uci": "a1d1",
+    "eval_before": {
+      "fen": "3qk3/8/8/3b4/8/8/8/R3K3 w Q - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 250
+          },
+          "moves": [
+            "a1d1",
+            "d8e7"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "3qk3/8/8/3b4/8/8/8/3RK3 b Q - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 250
+          },
+          "moves": [
+            "d8e7",
+            "e1f2"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 3qk3/8/8/3b4/8/8/8/R3K3 w Q - 0 1\nWhite to move, move 1.\nMove played: Rd1.\nVerdict: Best.\nWhite's winning chances: 72% → 72%.\nBest move: Rd1.\nBest line: Rd1 Qe7+.\nFacts:\n- Rd1 attacks the bishop on d5.\n- After Rd1, Black's best reply is Qe7+.\n- Rd1 pins the bishop on d5 to the queen on d8.\n- Black has a check: Qh4+.\n- Black is up a rook and two pawns in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 3qk3/8/8/3b4/8/8/8/R3K3 w Q - 0 1\nWhite to move, move 1.\nMove played: Rd1.\nVerdict: Best.\nWhite's winning chances: 72% → 72%.\nBest move: Rd1.\nBest line: Rd1 Qe7+.\nFacts:\n- Rd1 attacks the bishop on d5.\n- After Rd1, Black's best reply is Qe7+.\n- Rd1 pins the bishop on d5 to the queen on d8.\n- Black has a check: Qh4+.\n- Black is up a rook and two pawns in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "pin_relative_rook_queen"
+  },
+  {
+    "id": 9,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "r1bqk2r/ppp2ppp/2np1n2/4p3/4P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+    "move_uci": "h2h3",
+    "eval_before": {
+      "fen": "r1bqk2r/ppp2ppp/2np1n2/4p3/4P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 20
+          },
+          "moves": [
+            "f1e2"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1bqk2r/ppp2ppp/2np1n2/4p3/4P3/3P1N1P/PPP2PP1/RNBQKB1R b KQkq - 0 5",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -10
+          },
+          "moves": [
+            "c8g4",
+            "f1e2",
+            "g4f3"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqk2r/ppp2ppp/2np1n2/4p3/4P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 0 5\nWhite to move, move 5.\nMove played: h3.\nVerdict: Good.\nWhite's winning chances: 52% → 49%.\nBest move: Be2.\nBest line: Be2.\nFacts:\n- After h3, Black's best reply is Bg4.\n- After Bg4, Black wins the knight on f3.\n- Bg4 pins the knight on f3 to the queen on d1.\n- White is up a bishop.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqk2r/ppp2ppp/2np1n2/4p3/4P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 0 5\nWhite to move, move 5.\nMove played: h3.\nVerdict: Good.\nWhite's winning chances: 52% → 49%.\nBest move: Be2.\nBest line: Be2.\nFacts:\n- After h3, Black's best reply is Bg4.\n- After Bg4, Black wins the knight on f3.\n- Bg4 pins the knight on f3 to the queen on d1.\n- White is up a bishop.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "pin_reply_bishop"
+  },
+  {
+    "id": 10,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "4q3/8/4k3/8/5R2/8/8/6K1 w - - 0 1",
+    "move_uci": "f4e4",
+    "eval_before": {
+      "fen": "4q3/8/4k3/8/5R2/8/8/6K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 800
+          },
+          "moves": [
+            "f4e4",
+            "e6d6",
+            "e4e8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4q3/8/4k3/8/4R3/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 800
+          },
+          "moves": [
+            "e6d6",
+            "e4e8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4q3/8/4k3/8/5R2/8/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re4+.\nVerdict: Best.\nWhite's winning chances: 95% → 95%.\nBest move: Re4+.\nBest line: Re4+ Kd6 Rxe8.\nFacts:\n- After Re4+, Black's best reply is Kd6.\n- Re4+ skewers the king on e6 and the queen on e8.\n- Black king is in check on e6.\n- Black is up a minor piece and a pawn in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4q3/8/4k3/8/5R2/8/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re4+.\nVerdict: Best.\nWhite's winning chances: 95% → 95%.\nBest move: Re4+.\nBest line: Re4+ Kd6 Rxe8.\nFacts:\n- After Re4+, Black's best reply is Kd6.\n- Re4+ skewers the king on e6 and the queen on e8.\n- Black king is in check on e6.\n- Black is up a minor piece and a pawn in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "skewer_rook_king_queen"
+  },
+  {
+    "id": 11,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "8/7r/8/5k2/8/5B2/8/6K1 w - - 0 1",
+    "move_uci": "f3e4",
+    "eval_before": {
+      "fen": "8/7r/8/5k2/8/5B2/8/6K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "f3e4",
+            "f5e4",
+            "g1g2"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "8/7r/8/5k2/4B3/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "f5e4",
+            "g1g2"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: 8/7r/8/5k2/8/5B2/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Be4+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Be4+.\nBest line: Be4+ Kxe4 Kg2.\nFacts:\n- After Be4+, Black's best reply is Kxe4.\n- After Be4+, Black captures the bishop on e4 with Kxe4.\n- Be4+ skewers the king on f5 and the rook on h7.\n- The bishop on e4 is not defended.\n- Black can capture the bishop on e4 with Kxe4.\n- Black king is in check on f5.\n- Black is up the exchange.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: 8/7r/8/5k2/8/5B2/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Be4+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Be4+.\nBest line: Be4+ Kxe4 Kg2.\nFacts:\n- After Be4+, Black's best reply is Kxe4.\n- After Be4+, Black captures the bishop on e4 with Kxe4.\n- Be4+ skewers the king on f5 and the rook on h7.\n- The bishop on e4 is not defended.\n- Black can capture the bishop on e4 with Kxe4.\n- Black king is in check on f5.\n- Black is up the exchange.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "skewer_bishop_king_rook"
+  },
+  {
+    "id": 12,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "r7/8/8/3k4/8/8/8/1Q4K1 w - - 0 1",
+    "move_uci": "b1e4",
+    "eval_before": {
+      "fen": "r7/8/8/3k4/8/8/8/1Q4K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 500
+          },
+          "moves": [
+            "b1e4",
+            "d5e4",
+            "g1f2"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r7/8/8/3k4/4Q3/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 500
+          },
+          "moves": [
+            "d5e4",
+            "g1f2"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r7/8/8/3k4/8/8/8/1Q4K1 w - - 0 1\nWhite to move, move 1.\nMove played: Qe4+.\nVerdict: Best.\nWhite's winning chances: 86% → 86%.\nBest move: Qe4+.\nBest line: Qe4+ Kxe4 Kf2.\nFacts:\n- After Qe4+, Black's best reply is Kxe4.\n- After Qe4+, Black captures the queen on e4 with Kxe4.\n- Qe4+ skewers the king on d5 and the rook on a8.\n- The queen on e4 is not defended.\n- Black can capture the queen on e4 with Kxe4.\n- Black king is in check on d5.\n- White is up a minor piece and a pawn in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r7/8/8/3k4/8/8/8/1Q4K1 w - - 0 1\nWhite to move, move 1.\nMove played: Qe4+.\nVerdict: Best.\nWhite's winning chances: 86% → 86%.\nBest move: Qe4+.\nBest line: Qe4+ Kxe4 Kf2.\nFacts:\n- After Qe4+, Black's best reply is Kxe4.\n- After Qe4+, Black captures the queen on e4 with Kxe4.\n- Qe4+ skewers the king on d5 and the rook on a8.\n- The queen on e4 is not defended.\n- Black can capture the queen on e4 with Kxe4.\n- Black king is in check on d5.\n- White is up a minor piece and a pawn in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "skewer_queen_king_rook"
+  },
+  {
+    "id": 13,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "4r1k1/8/4q3/8/5R2/8/8/6K1 w - - 0 1",
+    "move_uci": "f4e4",
+    "eval_before": {
+      "fen": "4r1k1/8/4q3/8/5R2/8/8/6K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 400
+          },
+          "moves": [
+            "f4e4",
+            "e6f7",
+            "e4e8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4r1k1/8/4q3/8/4R3/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 400
+          },
+          "moves": [
+            "e6f7",
+            "e4e8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: 4r1k1/8/4q3/8/5R2/8/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re4.\nVerdict: Best.\nWhite's winning chances: 81% → 81%.\nBest move: Re4.\nBest line: Re4 Qf7 Rxe8+.\nFacts:\n- Re4 attacks the queen on e6.\n- After Re4, Black's best reply is Qf7.\n- Re4 skewers the queen on e6 and the rook on e8.\n- The rook on e4 is not defended.\n- Black has a check: Qg4+.\n- Black can capture the rook on e4 with Qxe4.\n- White threatens Rxe6.\n- Black is up a queen.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: 4r1k1/8/4q3/8/5R2/8/8/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re4.\nVerdict: Best.\nWhite's winning chances: 81% → 81%.\nBest move: Re4.\nBest line: Re4 Qf7 Rxe8+.\nFacts:\n- Re4 attacks the queen on e6.\n- After Re4, Black's best reply is Qf7.\n- Re4 skewers the queen on e6 and the rook on e8.\n- The rook on e4 is not defended.\n- Black has a check: Qg4+.\n- Black can capture the rook on e4 with Qxe4.\n- White threatens Rxe6.\n- Black is up a queen.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "skewer_rook_queen_rook"
+  },
+  {
+    "id": 14,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "4Q3/8/8/8/4K3/P7/8/3r2k1 w - - 0 1",
+    "move_uci": "a3a4",
+    "eval_before": {
+      "fen": "4Q3/8/8/8/4K3/P7/8/3r2k1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 0
+          },
+          "moves": [
+            "e8h5"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4Q3/8/8/8/P3K3/8/8/3r2k1 b - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -800
+          },
+          "moves": [
+            "d1e1",
+            "e4f3",
+            "e1e8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4Q3/8/8/8/4K3/P7/8/3r2k1 w - - 0 1\nWhite to move, move 1.\nMove played: a4.\nVerdict: Blunder.\nWhite's winning chances: 50% → 5%.\nBest move: Qh5.\nBest line: Qh5.\nFacts:\n- After a4, Black's best reply is Re1+.\n- After Re1+, Black wins the queen on e8.\n- Re1+ skewers the king on e4 and the queen on e8.\n- Black has a check: Re1+.\n- White threatens Qg6+.\n- White is up a rook in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4Q3/8/8/8/4K3/P7/8/3r2k1 w - - 0 1\nWhite to move, move 1.\nMove played: a4.\nVerdict: Blunder.\nWhite's winning chances: 50% → 5%.\nBest move: Qh5.\nBest line: Qh5.\nFacts:\n- After a4, Black's best reply is Re1+.\n- After Re1+, Black wins the queen on e8.\n- Re1+ skewers the king on e4 and the queen on e8.\n- Black has a check: Re1+.\n- White threatens Qg6+.\n- White is up a rook in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "skewer_reply_rook"
+  },
+  {
+    "id": 15,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "4k3/8/2N5/8/B7/8/8/4K3 w - - 0 1",
+    "move_uci": "c6e5",
+    "eval_before": {
+      "fen": "4k3/8/2N5/8/B7/8/8/4K3 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "c6e5",
+            "e8e7",
+            "e5g6"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4k3/8/8/4N3/B7/8/8/4K3 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "e8e7",
+            "e5g6"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: 4k3/8/2N5/8/B7/8/8/4K3 w - - 0 1\nWhite to move, move 1.\nMove played: Ne5+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Ne5+.\nBest line: Ne5+ Ke7 Ng6+.\nFacts:\n- After Ne5+, Black's best reply is Ke7.\n- Ne5+ opens a discovered attack from the bishop on a4 against the king on e8.\n- Black king is in check on e8.\n- White is up two minor pieces in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: 4k3/8/2N5/8/B7/8/8/4K3 w - - 0 1\nWhite to move, move 1.\nMove played: Ne5+.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: Ne5+.\nBest line: Ne5+ Ke7 Ng6+.\nFacts:\n- After Ne5+, Black's best reply is Ke7.\n- Ne5+ opens a discovered attack from the bishop on a4 against the king on e8.\n- Black king is in check on e8.\n- White is up two minor pieces in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "discovered_check_bishop_king"
+  },
+  {
+    "id": 16,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "4q1k1/8/8/4N3/8/8/8/4R1K1 w - - 0 1",
+    "move_uci": "e5f3",
+    "eval_before": {
+      "fen": "4q1k1/8/8/4N3/8/8/8/4R1K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 400
+          },
+          "moves": [
+            "e5f3",
+            "e8e1",
+            "f3e1"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4q1k1/8/8/8/8/5N2/8/4R1K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 400
+          },
+          "moves": [
+            "e8e1",
+            "f3e1"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 4q1k1/8/8/4N3/8/8/8/4R1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Nf3.\nVerdict: Best.\nWhite's winning chances: 81% → 81%.\nBest move: Nf3.\nBest line: Nf3 Qxe1+ Nxe1.\nFacts:\n- After Nf3, Black's best reply is Qxe1+.\n- Nf3 opens a discovered attack from the rook on e1 against the queen on e8.\n- The queen on e8 is not defended.\n- Black has a check: Qxe1+.\n- White threatens Rxe8+.\n- Black is up a pawn in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 4q1k1/8/8/4N3/8/8/8/4R1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Nf3.\nVerdict: Best.\nWhite's winning chances: 81% → 81%.\nBest move: Nf3.\nBest line: Nf3 Qxe1+ Nxe1.\nFacts:\n- After Nf3, Black's best reply is Qxe1+.\n- Nf3 opens a discovered attack from the rook on e1 against the queen on e8.\n- The queen on e8 is not defended.\n- Black has a check: Qxe1+.\n- White threatens Rxe8+.\n- Black is up a pawn in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "discovered_attack_rook_queen"
+  },
+  {
+    "id": 17,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "k7/7r/8/8/8/3P4/8/KB6 w - - 0 1",
+    "move_uci": "d3d4",
+    "eval_before": {
+      "fen": "k7/7r/8/8/8/3P4/8/KB6 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "d3d4",
+            "h7h8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "k7/7r/8/8/3P4/8/8/KB6 b - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 300
+          },
+          "moves": [
+            "h7h8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: k7/7r/8/8/8/3P4/8/KB6 w - - 0 1\nWhite to move, move 1.\nMove played: d4.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: d4.\nBest line: d4 Rh8.\nFacts:\n- After d4, Black's best reply is Rh8.\n- d4 opens a discovered attack from the bishop on b1 against the rook on h7.\n- The rook on h7 is not defended.\n- Black has a check: Ra7+.\n- White threatens Bxh7.\n- Black is up a pawn in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: k7/7r/8/8/8/3P4/8/KB6 w - - 0 1\nWhite to move, move 1.\nMove played: d4.\nVerdict: Best.\nWhite's winning chances: 75% → 75%.\nBest move: d4.\nBest line: d4 Rh8.\nFacts:\n- After d4, Black's best reply is Rh8.\n- d4 opens a discovered attack from the bishop on b1 against the rook on h7.\n- The rook on h7 is not defended.\n- Black has a check: Ra7+.\n- White threatens Bxh7.\n- Black is up a pawn in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "discovered_attack_bishop_rook"
+  },
+  {
+    "id": 18,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "6k1/3n4/8/8/8/3B4/8/3Q2K1 w - - 0 1",
+    "move_uci": "d3e4",
+    "eval_before": {
+      "fen": "6k1/3n4/8/8/8/3B4/8/3Q2K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "d3e4",
+            "d7f6"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "6k1/3n4/8/8/4B3/8/8/3Q2K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "d7f6"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 6k1/3n4/8/8/8/3B4/8/3Q2K1 w - - 0 1\nWhite to move, move 1.\nMove played: Be4.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Be4.\nBest line: Be4 Nf6.\nFacts:\n- After Be4, Black's best reply is Nf6.\n- Be4 opens a discovered attack from the queen on d1 against the knight on d7.\n- The knight on d7 is not defended.\n- White threatens Qxd7.\n- White is up a queen in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 6k1/3n4/8/8/8/3B4/8/3Q2K1 w - - 0 1\nWhite to move, move 1.\nMove played: Be4.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Be4.\nBest line: Be4 Nf6.\nFacts:\n- After Be4, Black's best reply is Nf6.\n- Be4 opens a discovered attack from the queen on d1 against the knight on d7.\n- The knight on d7 is not defended.\n- White threatens Qxd7.\n- White is up a queen in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "discovered_attack_queen_minor"
+  },
+  {
+    "id": 19,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "7k/8/8/8/8/2N5/8/B3K3 w - - 0 1",
+    "move_uci": "c3e4",
+    "eval_before": {
+      "fen": "7k/8/8/8/8/2N5/8/B3K3 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "c3e4",
+            "h8g8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "7k/8/8/8/4N3/8/8/B3K3 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 200
+          },
+          "moves": [
+            "h8g8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: 7k/8/8/8/8/2N5/8/B3K3 w - - 0 1\nWhite to move, move 1.\nMove played: Ne4+.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Ne4+.\nBest line: Ne4+ Kg8.\nFacts:\n- After Ne4+, Black's best reply is Kg8.\n- Ne4+ opens a discovered attack from the bishop on a1 against the king on h8.\n- Black king is in check on h8.\n- White is up two minor pieces in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: 7k/8/8/8/8/2N5/8/B3K3 w - - 0 1\nWhite to move, move 1.\nMove played: Ne4+.\nVerdict: Best.\nWhite's winning chances: 68% → 68%.\nBest move: Ne4+.\nBest line: Ne4+ Kg8.\nFacts:\n- After Ne4+, Black's best reply is Kg8.\n- Ne4+ opens a discovered attack from the bishop on a1 against the king on h8.\n- Black king is in check on h8.\n- White is up two minor pieces in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "discovered_check_bishop_king_diagonal"
+  },
+  {
+    "id": 20,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "6k1/5ppp/8/8/8/8/8/4Q1K1 w - - 0 1",
+    "move_uci": "e1e7",
+    "eval_before": {
+      "fen": "6k1/5ppp/8/8/8/8/8/4Q1K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": 1
+          },
+          "moves": [
+            "e1e8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "6k1/4Qppp/8/8/8/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": 1
+          },
+          "moves": [
+            "h7h6",
+            "e7e8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 6k1/5ppp/8/8/8/8/8/4Q1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Qe7.\nVerdict: Good.\nWhite's winning chances: 100% → 100%.\nBest move: Qe8#.\nBest line: Qe8#.\nFacts:\n- After Qe7, Black's best reply is h6.\n- White has a forced checkmate in 1 move starting with h6.\n- White threatens Qd8#.\n- White is up two minor pieces in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 6k1/5ppp/8/8/8/8/8/4Q1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Qe7.\nVerdict: Good.\nWhite's winning chances: 100% → 100%.\nBest move: Qe8#.\nBest line: Qe8#.\nFacts:\n- After Qe7, Black's best reply is h6.\n- White has a forced checkmate in 1 move starting with h6.\n- White threatens Qd8#.\n- White is up two minor pieces in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "mate_mover_in_1"
+  },
+  {
+    "id": 21,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1",
+    "move_uci": "e1e7",
+    "eval_before": {
+      "fen": "6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": 2
+          },
+          "moves": [
+            "e1e8"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "6k1/4Rppp/8/8/8/8/8/6K1 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": 2
+          },
+          "moves": [
+            "g8f8",
+            "e7a7",
+            "f8e8",
+            "a7a8"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: 6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re7.\nVerdict: Good.\nWhite's winning chances: 100% → 100%.\nBest move: Re8#.\nBest line: Re8#.\nFacts:\n- After Re7, Black's best reply is Kf8.\n- White has a forced checkmate in 2 moves starting with Kf8.\n- White threatens Re8#.\n- White is up two pawns in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: 6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1\nWhite to move, move 1.\nMove played: Re7.\nVerdict: Good.\nWhite's winning chances: 100% → 100%.\nBest move: Re8#.\nBest line: Re8#.\nFacts:\n- After Re7, Black's best reply is Kf8.\n- White has a forced checkmate in 2 moves starting with Kf8.\n- White threatens Re8#.\n- White is up two pawns in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "mate_mover_in_2"
+  },
+  {
+    "id": 22,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "4r1k1/8/8/8/8/8/4q3/6K1 w - - 0 1",
+    "move_uci": "g1h1",
+    "eval_before": {
+      "fen": "4r1k1/8/8/8/8/8/4q3/6K1 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": -1
+          },
+          "moves": [
+            "g1h1"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4r1k1/8/8/8/8/8/4q3/7K b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": -1
+          },
+          "moves": [
+            "e2e1"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4r1k1/8/8/8/8/8/4q3/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Kh1.\nVerdict: Only move.\nWhite's winning chances: 0% → 0%.\nBest move: Kh1.\nBest line: Kh1.\nFacts:\n- After Kh1, Black's best reply is Qe1+.\n- Black threatens checkmate with Qe1+.\n- Black has a check: Qd1+.\n- Black is up a queen in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: 4r1k1/8/8/8/8/8/4q3/6K1 w - - 0 1\nWhite to move, move 1.\nMove played: Kh1.\nVerdict: Only move.\nWhite's winning chances: 0% → 0%.\nBest move: Kh1.\nBest line: Kh1.\nFacts:\n- After Kh1, Black's best reply is Qe1+.\n- Black threatens checkmate with Qe1+.\n- Black has a check: Qd1+.\n- Black is up a queen in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "mate_opponent_threat_in_1"
+  },
+  {
+    "id": 23,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "6k1/8/8/8/8/8/8/4K3 w - - 0 1",
+    "move_uci": "e1d1",
+    "eval_before": {
+      "fen": "6k1/8/8/8/8/8/8/4K3 w - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 0
+          },
+          "moves": [
+            "e1e2"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "6k1/8/8/8/8/8/8/3K4 b - - 1 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": -2
+          },
+          "moves": [
+            "g8f7"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: 6k1/8/8/8/8/8/8/4K3 w - - 0 1\nWhite to move, move 1.\nMove played: Kd1.\nVerdict: Blunder.\nWhite's winning chances: 50% → 0%.\nBest move: Ke2.\nBest line: Ke2.\nFacts:\n- After Kd1, Black's best reply is Kf7.\n- Black threatens checkmate with Kf7.\n- Material: equal.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: 6k1/8/8/8/8/8/8/4K3 w - - 0 1\nWhite to move, move 1.\nMove played: Kd1.\nVerdict: Blunder.\nWhite's winning chances: 50% → 0%.\nBest move: Ke2.\nBest line: Ke2.\nFacts:\n- After Kd1, Black's best reply is Kf7.\n- Black threatens checkmate with Kf7.\n- Material: equal.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "mate_opponent_threat_in_2"
+  },
+  {
+    "id": 24,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "4R1K1/8/8/8/8/8/4Q3/6k1 b - - 0 1",
+    "move_uci": "g1h1",
+    "eval_before": {
+      "fen": "4R1K1/8/8/8/8/8/4Q3/6k1 b - - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": -1
+          },
+          "moves": [
+            "g1h1"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "4R1K1/8/8/8/8/8/4Q3/7k w - - 1 2",
+      "pvs": [
+        {
+          "score": {
+            "type": "mate",
+            "value": -1
+          },
+          "moves": [
+            "e8e7"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 4R1K1/8/8/8/8/8/4Q3/6k1 b - - 0 1\nBlack to move, move 1.\nMove played: Kh1.\nVerdict: Only move.\nBlack's winning chances: 100% → 100%.\nBest move: Kh1.\nBest line: Kh1.\nFacts:\n- After Kh1, White's best reply is Re7.\n- Black has a forced checkmate in 1 move starting with Re7.\n- White has a check: Qd1+.\n- White is up a queen in material.\n- Phase: endgame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: 4R1K1/8/8/8/8/8/4Q3/6k1 b - - 0 1\nBlack to move, move 1.\nMove played: Kh1.\nVerdict: Only move.\nBlack's winning chances: 100% → 100%.\nBest move: Kh1.\nBest line: Kh1.\nFacts:\n- After Kh1, White's best reply is Re7.\n- Black has a forced checkmate in 1 move starting with Re7.\n- White has a check: Qd1+.\n- White is up a queen in material.\n- Phase: endgame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "mate_black_mover_in_1"
+  },
+  {
+    "id": 25,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+    "move_uci": "h2h3",
+    "eval_before": {
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 40
+          },
+          "moves": [
+            "f3e5"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N1P/PPPP1PP1/RNBQKB1R b KQkq - 0 3",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -30
+          },
+          "moves": [
+            "g8f6"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3\nWhite to move, move 3.\nMove played: h3.\nVerdict: Inaccuracy.\nWhite's winning chances: 54% → 47%.\nBest move: Nxe5.\nBest line: Nxe5.\nFacts:\n- After h3, Black's best reply is Nf6.\n- Best move Nxe5 captures the pawn on e5.\n- Material: equal.\n- Phase: opening.\n- Opening: King's Knight Opening, Normal Variation.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3\nWhite to move, move 3.\nMove played: h3.\nVerdict: Inaccuracy.\nWhite's winning chances: 54% → 47%.\nBest move: Nxe5.\nBest line: Nxe5.\nFacts:\n- After h3, Black's best reply is Nf6.\n- Best move Nxe5 captures the pawn on e5.\n- Material: equal.\n- Phase: opening.\n- Opening: King's Knight Opening, Normal Variation.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "refutation_captures_pawn"
+  },
+  {
+    "id": 26,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "long",
+    "fen": "r1b1kbnr/pppp1ppp/8/4q3/5B2/8/PPP2PPP/RN1Q1RK1 w kq - 0 1",
+    "move_uci": "a2a3",
+    "eval_before": {
+      "fen": "r1b1kbnr/pppp1ppp/8/4q3/5B2/8/PPP2PPP/RN1Q1RK1 w kq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 600
+          },
+          "moves": [
+            "f4e5",
+            "d7d6"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1b1kbnr/pppp1ppp/8/4q3/5B2/P7/1PP2PPP/RN1Q1RK1 b kq - 0 1",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -200
+          },
+          "moves": [
+            "e5f4"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: long\n\nFEN: r1b1kbnr/pppp1ppp/8/4q3/5B2/8/PPP2PPP/RN1Q1RK1 w kq - 0 1\nWhite to move, move 1.\nMove played: a3.\nVerdict: Blunder.\nWhite's winning chances: 90% → 32%.\nBest move: Bxe5.\nBest line: Bxe5 d6.\nFacts:\n- After a3, Black's best reply is Qxf4.\n- After a3, Black captures the bishop on f4 with Qxf4.\n- Qxf4 pins the pawn on f2 to the rook on f1.\n- Best move Bxe5 captures the queen on e5.\n- The bishop on f4 is not defended.\n- The queen on e5 is not defended.\n- Black can capture the bishop on f4 with Qxf4.\n- White threatens Bxe5.\n- Black is up a minor piece and a pawn in material.\n- Phase: middlegame.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: long\n\nFEN: r1b1kbnr/pppp1ppp/8/4q3/5B2/8/PPP2PPP/RN1Q1RK1 w kq - 0 1\nWhite to move, move 1.\nMove played: a3.\nVerdict: Blunder.\nWhite's winning chances: 90% → 32%.\nBest move: Bxe5.\nBest line: Bxe5 d6.\nFacts:\n- After a3, Black's best reply is Qxf4.\n- After a3, Black captures the bishop on f4 with Qxf4.\n- Qxf4 pins the pawn on f2 to the rook on f1.\n- Best move Bxe5 captures the queen on e5.\n- The bishop on f4 is not defended.\n- The queen on e5 is not defended.\n- Black can capture the bishop on f4 with Qxf4.\n- White threatens Bxe5.\n- Black is up a minor piece and a pawn in material.\n- Phase: middlegame.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "refutation_captures_queen"
+  },
+  {
+    "id": 27,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "long",
+    "fen": "r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R w KQkq - 0 4",
+    "move_uci": "h2h3",
+    "eval_before": {
+      "fen": "r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R w KQkq - 0 4",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 0
+          },
+          "moves": [
+            "b1d2",
+            "e4f3"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R b KQkq - 0 4",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -250
+          },
+          "moves": [
+            "e4f3"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: long\n\nFEN: r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R w KQkq - 0 4\nWhite to move, move 4.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 28%.\nBest move: Nbd2.\nBest line: Nbd2 exf3.\nFacts:\n- After h3, Black's best reply is exf3.\n- After h3, Black captures the knight on f3 with exf3.\n- Best move Nbd2 defends the knight on f3.\n- The knight on f3 is not defended.\n- Black has a check: Bb4+.\n- Black can capture the knight on f3 with exf3.\n- Black is up a rook and two pawns in material.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: long\n\nFEN: r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R w KQkq - 0 4\nWhite to move, move 4.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 28%.\nBest move: Nbd2.\nBest line: Nbd2 exf3.\nFacts:\n- After h3, Black's best reply is exf3.\n- After h3, Black captures the knight on f3 with exf3.\n- Best move Nbd2 defends the knight on f3.\n- The knight on f3 is not defended.\n- Black has a check: Bb4+.\n- Black can capture the knight on f3 with exf3.\n- Black is up a rook and two pawns in material.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "refutation_defends_knight"
+  },
+  {
+    "id": 28,
+    "task": "explain_move",
+    "level": "beginner",
+    "detail": "short",
+    "fen": "r1b1k1nr/pppp1ppp/2n5/4p3/1qB1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 5",
+    "move_uci": "h2h3",
+    "eval_before": {
+      "fen": "r1b1k1nr/pppp1ppp/2n5/4p3/1qB1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 5",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 0
+          },
+          "moves": [
+            "b2b3",
+            "b4e7"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "r1b1k1nr/pppp1ppp/2n5/4p3/1qB1P3/7P/PPPP1PP1/RNBQK1NR b KQkq - 0 5",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -300
+          },
+          "moves": [
+            "b4c4"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r1b1k1nr/pppp1ppp/2n5/4p3/1qB1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 5\nWhite to move, move 5.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 25%.\nBest move: b3.\nBest line: b3 Qe7.\nFacts:\n- After h3, Black's best reply is Qxc4.\n- After h3, Black captures the bishop on c4 with Qxc4.\n- Best move b3 defends the bishop on c4.\n- The bishop on c4 is not defended.\n- Black has a check: Qxd2+.\n- Black can capture the bishop on c4 with Qxc4.\n- White is up a bishop.\n- Phase: opening.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: beginner\ndetail: short\n\nFEN: r1b1k1nr/pppp1ppp/2n5/4p3/1qB1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 5\nWhite to move, move 5.\nMove played: h3.\nVerdict: Blunder.\nWhite's winning chances: 50% → 25%.\nBest move: b3.\nBest line: b3 Qe7.\nFacts:\n- After h3, Black's best reply is Qxc4.\n- After h3, Black captures the bishop on c4 with Qxc4.\n- Best move b3 defends the bishop on c4.\n- The bishop on c4 is not defended.\n- Black has a check: Qxd2+.\n- Black can capture the bishop on c4 with Qxc4.\n- White is up a bishop.\n- Phase: opening.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "refutation_defends_bishop"
+  },
+  {
+    "id": 29,
+    "task": "explain_move",
+    "level": "club",
+    "detail": "short",
+    "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "move_uci": "a2a4",
+    "eval_before": {
+      "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": 30
+          },
+          "moves": [
+            "g1f3",
+            "b8c6"
+          ]
+        }
+      ]
+    },
+    "eval_after": {
+      "fen": "rnbqkbnr/pppp1ppp/8/4p3/P3P3/8/1PPP1PPP/RNBQKBNR b KQkq - 0 2",
+      "pvs": [
+        {
+          "score": {
+            "type": "cp",
+            "value": -50
+          },
+          "moves": [
+            "g8f6",
+            "b1c3"
+          ]
+        }
+      ]
+    },
+    "expected_user_message": "task: explain_move\nlevel: club\ndetail: short\n\nFEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2\nWhite to move, move 2.\nMove played: a4.\nVerdict: Inaccuracy.\nWhite's winning chances: 53% → 45%.\nBest move: Nf3.\nBest line: Nf3 Nc6.\nFacts:\n- After a4, Black's best reply is Nf6.\n- Best move Nf3 develops the knight and prepares castling.\n- Material: equal.\n- Phase: opening.\n- Opening: Open Game.",
+    "expected_chat_prompt": "<|im_start|>system\nYou are Second, a chess assistant. You explain chess positions and moves clearly using the provided facts.<|im_end|>\n<|im_start|>user\ntask: explain_move\nlevel: club\ndetail: short\n\nFEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2\nWhite to move, move 2.\nMove played: a4.\nVerdict: Inaccuracy.\nWhite's winning chances: 53% → 45%.\nBest move: Nf3.\nBest line: Nf3 Nc6.\nFacts:\n- After a4, Black's best reply is Nf6.\n- Best move Nf3 develops the knight and prepares castling.\n- Material: equal.\n- Phase: opening.\n- Opening: Open Game.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "motif_tag": "refutation_develops_castling"
+  }
+]

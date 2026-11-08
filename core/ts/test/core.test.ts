@@ -503,4 +503,40 @@ describe("Golden parity tests", () => {
       expect(actualChatPrompt).toBe(c.expected_chat_prompt);
     }
   });
+
+  it("verifies byte-for-byte parity against tactical golden file", () => {
+    const tacticalPath = resolve(import.meta.dirname, "../../golden/golden_tactical_30.json");
+    expect(existsSync(tacticalPath)).toBe(true);
+
+    const data = JSON.parse(readFileSync(tacticalPath, "utf-8"));
+    expect(data.length).toBe(30);
+    interface TacticalCase {
+      task: string;
+      level: string;
+      detail: string;
+      fen: string;
+      eval_before: EngineEval;
+      eval_after?: EngineEval | null;
+      move_uci?: string | null;
+      expected_user_message: string;
+      expected_chat_prompt: string;
+    }
+
+    for (let idx = 0; idx < data.length; idx++) {
+      const c = data[idx] as TacticalCase;
+      const actualUserMsg = buildUserMessage(
+        c.task,
+        c.level,
+        c.detail,
+        c.fen,
+        c.eval_before,
+        c.eval_after,
+        c.move_uci
+      );
+      expect(actualUserMsg).toBe(c.expected_user_message);
+
+      const actualChatPrompt = formatQwenChatPrompt(actualUserMsg);
+      expect(actualChatPrompt).toBe(c.expected_chat_prompt);
+    }
+  });
 });

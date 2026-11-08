@@ -12,7 +12,15 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 import chess
-from langdetect import DetectorFactory, detect
+
+try:
+    from langdetect import DetectorFactory, detect
+
+    # Set deterministic seed for language detection
+    DetectorFactory.seed = 0
+except ImportError:
+    DetectorFactory = None  # type: ignore
+    detect = None  # type: ignore
 
 from .parser import (
     SAN_MOVE_RE,
@@ -21,9 +29,6 @@ from .parser import (
     parse_moves,
     parse_piece_square_pairs,
 )
-
-# Set deterministic seed for language detection
-DetectorFactory.seed = 0
 
 # Piece name mapping to python-chess PieceType
 CHESS_PIECE_TYPES: Final[dict[str, chess.PieceType]] = {
@@ -101,6 +106,13 @@ class CheckResult:
 
     passed: bool
     reason: str
+
+
+from .claims import (
+    check_coach_voice,
+    check_opening_claims,
+    check_relational_claims,
+)
 
 
 def is_bad_verdict(verdict: str | None) -> bool:
@@ -483,7 +495,7 @@ def check_format(text: str, prompt_text: str = "") -> CheckResult:
 
     # Check English language for sentences with sufficient length
     words = clean_text.split()
-    if len(words) >= 4:
+    if len(words) >= 4 and detect is not None:
         try:
             detected_lang = detect(clean_text)
             if detected_lang != "en":

@@ -581,3 +581,37 @@ def test_golden_parity() -> None:
 
         actual_chat_prompt = format_qwen_chat_prompt(actual_user_msg)
         assert actual_chat_prompt == case["expected_chat_prompt"], f"Chat prompt mismatch on case {idx}"
+
+
+def test_tactical_golden_parity() -> None:
+    """Verify byte-for-byte parity against tactical golden file."""
+    tactical_path = PROJECT_ROOT / "core" / "golden" / "golden_tactical_30.json"
+    assert tactical_path.exists(), f"Tactical golden file not found at {tactical_path}."
+
+    with open(tactical_path, "r", encoding="utf-8") as f:
+        cases = json.load(f)
+
+    assert len(cases) == 30, f"Expected 30 tactical golden cases, got {len(cases)}."
+
+    for idx, case in enumerate(cases):
+        task = case["task"]
+        level = case["level"]
+        detail = case["detail"]
+        fen = case["fen"]
+        eval_before = case["eval_before"]
+        eval_after = case.get("eval_after")
+        move_uci = case.get("move_uci")
+
+        actual_user_msg = build_user_message(
+            task=task,
+            level=level,
+            detail=detail,
+            fen=fen,
+            eval_before=eval_before,
+            eval_after=eval_after,
+            move_uci=move_uci,
+        )
+        assert actual_user_msg == case["expected_user_message"], f"Tactical user message mismatch on case {idx}"
+
+        actual_chat_prompt = format_qwen_chat_prompt(actual_user_msg)
+        assert actual_chat_prompt == case["expected_chat_prompt"], f"Tactical chat prompt mismatch on case {idx}"

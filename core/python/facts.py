@@ -601,6 +601,525 @@ def compute_reply_and_material_change_facts(
     return facts
 
 
+def is_between(sq_mid: int, sq1: int, sq2: int) -> bool:
+    """Check if a square lies between two squares on a line.
+
+    If the three squares align, check the intermediate square.
+    Return true when the square lies between the endpoints.
+    """
+    r1, c1 = divmod(sq1, 8)
+    rm, cm = divmod(sq_mid, 8)
+    r2, c2 = divmod(sq2, 8)
+    dr, dc = r2 - r1, c2 - c1
+
+    if dr == 0 and dc != 0:
+        return r1 == rm and min(c1, c2) < cm < max(c1, c2)
+    if dc == 0 and dr != 0:
+        return c1 == cm and min(r1, r2) < rm < max(r1, r2)
+    if abs(dr) == abs(dc) and dr != 0:
+        drm, dcm = rm - r1, cm - c1
+        if abs(drm) != abs(dcm):
+            return False
+        if (dr > 0) != (drm > 0) or (dc > 0) != (dcm > 0):
+            return False
+        return abs(drm) < abs(dr)
+    return False
+
+
+def _get_ray_directions(piece_type: chess.PieceType) -> list[tuple[int, int]]:
+    """Return direction vectors for sliding pieces.
+
+    Bishops move diagonally.
+    Rooks move orthogonally.
+    Queens move in all eight directions.
+    """
+    diag = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+    orth = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    if piece_type == chess.BISHOP:
+        return diag
+    if piece_type == chess.ROOK:
+        return orth
+    if piece_type == chess.QUEEN:
+        return diag + orth
+    return []
+
+
+def _scan_ray(
+    board: chess.Board,
+    start_sq: int,
+    dr: int,
+    dc: int,
+) -> tuple[int | None, chess.Piece | None, int | None, chess.Piece | None]:
+    """Scan along a direction vector for the first two pieces.
+
+    Trace squares step by step.
+    Record the first two pieces encountered on the ray.
+    """
+    r = start_sq // 8 + dr
+    c = start_sq % 8 + dc
+    first_sq: int | None = None
+    first_p: chess.Piece | None = None
+    second_sq: int | None = None
+    second_p: chess.Piece | None = None
+
+    while 0 <= r < 8 and 0 <= c < 8:
+        sq = r * 8 + c
+        p = board.piece_at(sq)
+        if p is not None:
+            if first_sq is None:
+                first_sq = sq
+                first_p = p
+            elif second_sq is None:
+                second_sq = sq
+                second_p = p
+                break
+        r += dr
+        c += dc
+
+    return first_sq, first_p, second_sq, second_p
+
+
+def _check_fork_on_board(
+    board: chess.Board,
+    attacker_sq: int,
+    attacker_color: chess.Color,
+) -> tuple[tuple[chess.Piece, int], tuple[chess.Piece, int]] | None:
+    attacker_piece = board.piece_at(attacker_sq)
+    if attacker_piece is None or attacker_piece.piece_type == chess.KING:
+        return None
+    attacker_val = PIECE_VALUES.get(attacker_piece.piece_type, 0)
+    opp_color = not attacker_color
+    attacks = board.attacks(attacker_sq)
+
+    candidates: list[tuple[chess.Piece, int]] = []
+    for sq in attacks:
+        target = board.piece_at(sq)
+        if target is None or target.color != opp_color:
+            continue
+        if target.piece_type == chess.KING:
+            candidates.append((target, sq))
+        else:
+            target_val = PIECE_VALUES.get(target.piece_type, 0)
+            is_undefended = not board.is_attacked_by(opp_color, sq)
+            is_higher_val = target_val > attacker_val
+            if is_undefended or is_higher_val:
+                candidates.append((target, sq))
+
+    if not candidates:
+        return None
+
+    has_king = any(t[0].piece_type == chess.KING for t in candidates)
+    if not has_king:
+        candidates = [t for t in candidates if PIECE_VALUES.get(t[0].piece_type, 0) >= 3]
+
+    if len(candidates) < 2:
+        return None
+
+    candidates.sort(
+        key=lambda item: (
+            -(100 if item[0].piece_type == chess.KING else PIECE_VALUES.get(item[0].piece_type, 0)),
+            item[1],
+        )
+    )
+    return candidates[0], candidates[1]
+
+
+def compute_fork_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+    eval_after: dict[str, Any] | None,
+) -> str | None:
+    """Detect a fork by the moved piece or the best reply piece.
+
+    A fork attacks two or more high value or undefended pieces.
+    If the moved piece forks, return the fork fact.
+    If the best reply forks, return the reply fork fact.
+    """
+    mover_color = board_before.turn
+    pair = _check_fork_on_board(board_after, move.to_square, mover_color)
+    if pair is not None:
+        move_san = board_before.san(move)
+        p1_name = PIECE_NAMES.get(pair[0][0].piece_type, "piece")
+        sq1_name = chess.square_name(pair[0][1])
+        p2_name = PIECE_NAMES.get(pair[1][0].piece_type, "piece")
+        sq2_name = chess.square_name(pair[1][1])
+        return f"{move_san} forks the {p1_name} on {sq1_name} and the {p2_name} on {sq2_name}."
+
+    if eval_after and eval_after.get("pvs") and eval_after["pvs"][0].get("moves"):
+        reply_uci = eval_after["pvs"][0]["moves"][0]
+        try:
+            reply_move = chess.Move.from_uci(reply_uci)
+            if reply_move in board_after.legal_moves:
+                sim = board_after.copy(stack=False)
+                sim.push(reply_move)
+                pair_reply = _check_fork_on_board(sim, reply_move.to_square, not mover_color)
+                if pair_reply is not None:
+                    reply_san = board_after.san(reply_move)
+                    p1_name = PIECE_NAMES.get(pair_reply[0][0].piece_type, "piece")
+                    sq1_name = chess.square_name(pair_reply[0][1])
+                    p2_name = PIECE_NAMES.get(pair_reply[1][0].piece_type, "piece")
+                    sq2_name = chess.square_name(pair_reply[1][1])
+                    return f"{reply_san} forks the {p1_name} on {sq1_name} and the {p2_name} on {sq2_name}."
+        except ValueError:
+            pass
+
+    return None
+
+
+def _check_pin_on_board(
+    board: chess.Board,
+    slider_sq: int,
+    slider_color: chess.Color,
+) -> tuple[int, chess.Piece, int, chess.Piece] | None:
+    slider = board.piece_at(slider_sq)
+    if slider is None or slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        return None
+
+    opp_color = not slider_color
+    directions = _get_ray_directions(slider.piece_type)
+    candidates: list[tuple[int, int, chess.Piece, int, chess.Piece]] = []
+
+    for dr, dc in directions:
+        f_sq, f_p, s_sq, s_p = _scan_ray(board, slider_sq, dr, dc)
+        if f_sq is None or f_p is None or f_p.color != opp_color:
+            continue
+        if f_p.piece_type == chess.KING:
+            continue
+        if s_sq is None or s_p is None or s_p.color != opp_color:
+            continue
+
+        f_val = PIECE_VALUES.get(f_p.piece_type, 0)
+        s_val = PIECE_VALUES.get(s_p.piece_type, 0)
+
+        is_absolute = (s_p.piece_type == chess.KING)
+        is_relative = (s_p.piece_type in (chess.QUEEN, chess.ROOK) and s_val > f_val)
+
+        if is_absolute or is_relative:
+            target_rank = 100 if is_absolute else s_val
+            candidates.append((-target_rank, f_sq, f_p, s_sq, s_p))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    top = candidates[0]
+    return top[1], top[2], top[3], top[4]
+
+
+def compute_pin_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+    eval_after: dict[str, Any] | None,
+) -> str | None:
+    """Detect a pin by the moved piece or the best reply piece.
+
+    A pin holds a piece in front of a more valuable piece.
+    If the moved piece pins, return the pin fact.
+    If the best reply pins, return the reply pin fact.
+    """
+    mover_color = board_before.turn
+    res = _check_pin_on_board(board_after, move.to_square, mover_color)
+    if res is not None:
+        move_san = board_before.san(move)
+        f_sq, f_p, s_sq, s_p = res
+        p_name = PIECE_NAMES.get(f_p.piece_type, "piece")
+        sq_name = chess.square_name(f_sq)
+        tgt_name = PIECE_NAMES.get(s_p.piece_type, "piece")
+        tgt_sq = chess.square_name(s_sq)
+        return f"{move_san} pins the {p_name} on {sq_name} to the {tgt_name} on {tgt_sq}."
+
+    if eval_after and eval_after.get("pvs") and eval_after["pvs"][0].get("moves"):
+        reply_uci = eval_after["pvs"][0]["moves"][0]
+        try:
+            reply_move = chess.Move.from_uci(reply_uci)
+            if reply_move in board_after.legal_moves:
+                sim = board_after.copy(stack=False)
+                sim.push(reply_move)
+                res_reply = _check_pin_on_board(sim, reply_move.to_square, not mover_color)
+                if res_reply is not None:
+                    reply_san = board_after.san(reply_move)
+                    f_sq, f_p, s_sq, s_p = res_reply
+                    p_name = PIECE_NAMES.get(f_p.piece_type, "piece")
+                    sq_name = chess.square_name(f_sq)
+                    tgt_name = PIECE_NAMES.get(s_p.piece_type, "piece")
+                    tgt_sq = chess.square_name(s_sq)
+                    return f"{reply_san} pins the {p_name} on {sq_name} to the {tgt_name} on {tgt_sq}."
+        except ValueError:
+            pass
+
+    return None
+
+
+def _check_skewer_on_board(
+    board: chess.Board,
+    slider_sq: int,
+    slider_color: chess.Color,
+) -> tuple[int, chess.Piece, int, chess.Piece] | None:
+    slider = board.piece_at(slider_sq)
+    if slider is None or slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        return None
+
+    opp_color = not slider_color
+    directions = _get_ray_directions(slider.piece_type)
+    candidates: list[tuple[int, int, int, chess.Piece, int, chess.Piece]] = []
+
+    for dr, dc in directions:
+        f_sq, f_p, s_sq, s_p = _scan_ray(board, slider_sq, dr, dc)
+        if f_sq is None or f_p is None or f_p.color != opp_color:
+            continue
+        if f_p.piece_type not in (chess.KING, chess.QUEEN, chess.ROOK):
+            continue
+        if s_sq is None or s_p is None or s_p.color != opp_color:
+            continue
+        if s_p.piece_type == chess.KING:
+            continue
+
+        f_val = 100 if f_p.piece_type == chess.KING else PIECE_VALUES.get(f_p.piece_type, 0)
+        s_val = PIECE_VALUES.get(s_p.piece_type, 0)
+
+        if s_val <= f_val and s_val >= 1:
+            candidates.append((-f_val, -s_val, f_sq, f_p, s_sq, s_p))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    top = candidates[0]
+    return top[2], top[3], top[4], top[5]
+
+
+def compute_skewer_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+    eval_after: dict[str, Any] | None,
+) -> str | None:
+    """Detect a skewer by the moved piece or the best reply piece.
+
+    A skewer attacks a high value piece with a piece behind it.
+    If the moved piece skewers, return the skewer fact.
+    If the best reply skewers, return the reply skewer fact.
+    """
+    mover_color = board_before.turn
+    res = _check_skewer_on_board(board_after, move.to_square, mover_color)
+    if res is not None:
+        move_san = board_before.san(move)
+        f_sq, f_p, s_sq, s_p = res
+        p1_name = PIECE_NAMES.get(f_p.piece_type, "piece")
+        sq1_name = chess.square_name(f_sq)
+        p2_name = PIECE_NAMES.get(s_p.piece_type, "piece")
+        sq2_name = chess.square_name(s_sq)
+        return f"{move_san} skewers the {p1_name} on {sq1_name} and the {p2_name} on {sq2_name}."
+
+    if eval_after and eval_after.get("pvs") and eval_after["pvs"][0].get("moves"):
+        reply_uci = eval_after["pvs"][0]["moves"][0]
+        try:
+            reply_move = chess.Move.from_uci(reply_uci)
+            if reply_move in board_after.legal_moves:
+                sim = board_after.copy(stack=False)
+                sim.push(reply_move)
+                res_reply = _check_skewer_on_board(sim, reply_move.to_square, not mover_color)
+                if res_reply is not None:
+                    reply_san = board_after.san(reply_move)
+                    f_sq, f_p, s_sq, s_p = res_reply
+                    p1_name = PIECE_NAMES.get(f_p.piece_type, "piece")
+                    sq1_name = chess.square_name(f_sq)
+                    p2_name = PIECE_NAMES.get(s_p.piece_type, "piece")
+                    sq2_name = chess.square_name(s_sq)
+                    return f"{reply_san} skewers the {p1_name} on {sq1_name} and the {p2_name} on {sq2_name}."
+        except ValueError:
+            pass
+
+    return None
+
+
+def compute_discovered_attack_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+) -> str | None:
+    """Detect a discovered attack created by moving a piece.
+
+    Moving a piece unblocks a friendly sliding piece attack.
+    If an attack opens against a king, queen, rook, or undefended minor piece, return the fact.
+    """
+    mover_color = board_before.turn
+    opp_color = not mover_color
+    from_sq = move.from_square
+    to_sq = move.to_square
+
+    candidates: list[tuple[int, int, chess.Piece, int, chess.Piece]] = []
+
+    for sq1 in board_after.piece_map():
+        slider = board_after.piece_at(sq1)
+        if slider is None or slider.color != mover_color:
+            continue
+        if slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+            continue
+        if sq1 == to_sq:
+            continue
+
+        for sq2 in board_after.attacks(sq1):
+            target = board_after.piece_at(sq2)
+            if target is None or target.color != opp_color:
+                continue
+
+            if target.piece_type == chess.KING:
+                target_val = 100
+            elif target.piece_type in (chess.QUEEN, chess.ROOK):
+                target_val = PIECE_VALUES.get(target.piece_type, 0)
+            elif target.piece_type in (chess.BISHOP, chess.KNIGHT):
+                if not board_after.is_attacked_by(opp_color, sq2):
+                    target_val = PIECE_VALUES.get(target.piece_type, 0)
+                else:
+                    continue
+            else:
+                continue
+
+            if is_between(from_sq, sq1, sq2):
+                if sq2 not in board_before.attacks(sq1):
+                    candidates.append((-target_val, sq1, slider, sq2, target))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    top = candidates[0]
+    move_san = board_before.san(move)
+    slider_name = PIECE_NAMES.get(top[2].piece_type, "piece")
+    sq1_name = chess.square_name(top[1])
+    target_name = PIECE_NAMES.get(top[4].piece_type, "piece")
+    sq2_name = chess.square_name(top[3])
+    return f"{move_san} opens a discovered attack from the {slider_name} on {sq1_name} against the {target_name} on {sq2_name}."
+
+
+def compute_mate_threat_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+    eval_after: dict[str, Any] | None,
+) -> str | None:
+    """Detect a forced checkmate or checkmate threat from engine evaluations.
+
+    If the mover has forced mate, report the moves to mate.
+    If the opponent has forced mate, report the checkmate threat.
+    """
+    if not eval_after or not eval_after.get("pvs"):
+        return None
+    pvs = eval_after["pvs"]
+    if not pvs or "score" not in pvs[0]:
+        return None
+    score = pvs[0]["score"]
+    if score.get("type") != "mate":
+        return None
+    val = int(score.get("value", 0))
+    if val == 0:
+        return None
+    moves = pvs[0].get("moves", [])
+    if not moves:
+        return None
+    try:
+        reply_move = chess.Move.from_uci(moves[0])
+        if reply_move not in board_after.legal_moves:
+            return None
+    except ValueError:
+        return None
+
+    reply_san = board_after.san(reply_move)
+    mover_color = board_before.turn
+    mover_name = "White" if mover_color == chess.WHITE else "Black"
+    opp_name = "Black" if mover_color == chess.WHITE else "White"
+    mover_has_mate = (val > 0 if mover_color == chess.WHITE else val < 0)
+    n = abs(val)
+    moves_str = "move" if n == 1 else "moves"
+
+    if mover_has_mate:
+        return f"{mover_name} has a forced checkmate in {n} {moves_str} starting with {reply_san}."
+    return f"{opp_name} threatens checkmate with {reply_san}."
+
+
+def compute_refutation_reason_fact(
+    board_before: chess.Board,
+    move: chess.Move,
+    board_after: chess.Board,
+    eval_before: dict[str, Any],
+    eval_after: dict[str, Any] | None,
+) -> str | None:
+    """Explain what the best move accomplishes when the played move is bad.
+
+    When the verdict is Inaccuracy, Mistake, or Blunder, check the best move.
+    Report if the best move captures a piece, defends a hanging piece, or prepares castling.
+    """
+    verdict = classify_verdict(eval_before, eval_after, move.uci())
+    if verdict not in ("Inaccuracy", "Mistake", "Blunder"):
+        return None
+
+    pvs = eval_before.get("pvs", [])
+    if not pvs or not pvs[0].get("moves"):
+        return None
+    best_uci = pvs[0]["moves"][0]
+    if best_uci == move.uci():
+        return None
+
+    try:
+        best_move = chess.Move.from_uci(best_uci)
+        if best_move not in board_before.legal_moves:
+            return None
+    except ValueError:
+        return None
+
+    best_san = board_before.san(best_move)
+    mover_color = board_before.turn
+    opp_color = not mover_color
+    best_to = best_move.to_square
+
+    # 1. Best move captures a piece
+    if board_before.is_capture(best_move):
+        target = board_before.piece_at(best_to)
+        if target is None and board_before.is_en_passant(best_move):
+            target = chess.Piece(chess.PAWN, opp_color)
+        if target is not None:
+            target_name = PIECE_NAMES.get(target.piece_type, "piece")
+            sq_name = chess.square_name(best_to)
+            return f"Best move {best_san} captures the {target_name} on {sq_name}."
+
+    # 2. Best move defends a hanging piece
+    board_best = board_before.copy(stack=False)
+    board_best.push(best_move)
+    defended_candidates: list[tuple[int, int, chess.Piece]] = []
+    for sq in board_best.attacks(best_to):
+        if sq != best_to:
+            p = board_best.piece_at(sq)
+            if p and p.color == mover_color and p.piece_type != chess.KING:
+                if board_before.is_attacked_by(opp_color, sq) and not board_before.is_attacked_by(mover_color, sq):
+                    defended_candidates.append((PIECE_VALUES.get(p.piece_type, 0), sq, p))
+
+    if defended_candidates:
+        defended_candidates.sort(key=lambda item: (-item[0], item[1]))
+        top_p = defended_candidates[0][2]
+        top_sq = defended_candidates[0][1]
+        piece_name = PIECE_NAMES.get(top_p.piece_type, "piece")
+        sq_name = chess.square_name(top_sq)
+        return f"Best move {best_san} defends the {piece_name} on {sq_name}."
+
+    # 3. Best move develops a piece and prepares castling
+    if board_before.has_castling_rights(mover_color) and board_before.fullmove_number <= 12:
+        best_piece = board_before.piece_at(best_move.from_square)
+        if best_piece and best_piece.piece_type in (chess.KNIGHT, chess.BISHOP):
+            start_sqs = (
+                [chess.B1, chess.C1, chess.F1, chess.G1]
+                if mover_color == chess.WHITE
+                else [chess.B8, chess.C8, chess.F8, chess.G8]
+            )
+            if best_move.from_square in start_sqs:
+                piece_name = PIECE_NAMES.get(best_piece.piece_type, "piece")
+                return f"Best move {best_san} develops the {piece_name} and prepares castling."
+
+    return None
+
+
 def _append_position_facts(
     board: chess.Board,
     fen: str,
@@ -663,7 +1182,15 @@ def extract_facts(
         for f in compute_reply_and_material_change_facts(board_before, move, board_after, eval_after):
             raw_facts.append(f)
 
-        # 4-10. Shared position facts
+        # Tactical motifs
+        raw_facts.append(compute_fork_fact(board_before, move, board_after, eval_after))
+        raw_facts.append(compute_pin_fact(board_before, move, board_after, eval_after))
+        raw_facts.append(compute_skewer_fact(board_before, move, board_after, eval_after))
+        raw_facts.append(compute_discovered_attack_fact(board_before, move, board_after))
+        raw_facts.append(compute_mate_threat_fact(board_before, move, board_after, eval_after))
+        raw_facts.append(compute_refutation_reason_fact(board_before, move, board_after, eval_before, eval_after))
+
+        # Shared position facts
         _append_position_facts(board_after, fen, move_uci, raw_facts)
 
     elif task == "explain_position":

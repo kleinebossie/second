@@ -826,6 +826,644 @@ export function computeReplyAndMaterialChangeFacts(
  * Extract hanging pieces, checks, captures, threats, and king safety.
  * Extract material balance, phase, and opening facts.
  */
+/**
+ * Check if sqMid lies strictly between sq1 and sq2 along a ray.
+ */
+export function isBetween(sqMid: number, sq1: number, sq2: number): boolean {
+  const r1 = Math.floor(sq1 / 8);
+  const c1 = sq1 % 8;
+  const rm = Math.floor(sqMid / 8);
+  const cm = sqMid % 8;
+  const r2 = Math.floor(sq2 / 8);
+  const c2 = sq2 % 8;
+  const dr = r2 - r1;
+  const dc = c2 - c1;
+
+  if (dr === 0 && dc !== 0) {
+    return r1 === rm && Math.min(c1, c2) < cm && cm < Math.max(c1, c2);
+  }
+  if (dc === 0 && dr !== 0) {
+    return c1 === cm && Math.min(r1, r2) < rm && rm < Math.max(r1, r2);
+  }
+  if (Math.abs(dr) === Math.abs(dc) && dr !== 0) {
+    const drm = rm - r1;
+    const dcm = cm - c1;
+    if (Math.abs(drm) !== Math.abs(dcm)) {
+      return false;
+    }
+    if ((dr > 0) !== (drm > 0) || (dc > 0) !== (dcm > 0)) {
+      return false;
+    }
+    return Math.abs(drm) < Math.abs(dr);
+  }
+  return false;
+}
+
+/**
+ * Return direction vectors for sliding pieces.
+ */
+export function getRayDirections(role: Role): Array<[number, number]> {
+  const diag: Array<[number, number]> = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+  const orth: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  if (role === "bishop") return diag;
+  if (role === "rook") return orth;
+  if (role === "queen") return [...diag, ...orth];
+  return [];
+}
+
+/**
+ * Scan along a direction vector for the first two pieces.
+ */
+export function scanRay(
+  pos: Chess,
+  startSq: number,
+  dr: number,
+  dc: number
+): {
+  firstSq: number | null;
+  firstPiece: { role: Role; color: Color } | null;
+  secondSq: number | null;
+  secondPiece: { role: Role; color: Color } | null;
+} {
+  let r = Math.floor(startSq / 8) + dr;
+  let c = (startSq % 8) + dc;
+  let firstSq: number | null = null;
+  let firstPiece: { role: Role; color: Color } | null = null;
+  let secondSq: number | null = null;
+  let secondPiece: { role: Role; color: Color } | null = null;
+
+  while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+    const sq = r * 8 + c;
+    const p = pos.board.get(sq);
+    if (p) {
+      if (firstSq === null) {
+        firstSq = sq;
+        firstPiece = p;
+      } else if (secondSq === null) {
+        secondSq = sq;
+        secondPiece = p;
+        break;
+      }
+    }
+    r += dr;
+    c += dc;
+  }
+  return { firstSq, firstPiece, secondSq, secondPiece };
+}
+
+function checkForkOnBoard(
+  pos: Chess,
+  attackerSq: number,
+  attackerColor: Color
+): Array<{ target: { role: Role; color: Color }; sq: number }> | null {
+  const attackerPiece = pos.board.get(attackerSq);
+  if (!attackerPiece || attackerPiece.role === "king") return null;
+
+  const attackerVal = PIECE_VALUES[attackerPiece.role];
+  const oppColor = opposite(attackerColor);
+  const att = attacks(attackerPiece, attackerSq, pos.board.occupied);
+
+  const candidates: Array<{ target: { role: Role; color: Color }; sq: number }> = [];
+  for (const sq of att) {
+    const target = pos.board.get(sq);
+    if (!target || target.color !== oppColor) continue;
+
+    if (target.role === "king") {
+      candidates.push({ target, sq });
+    } else {
+      const targetVal = PIECE_VALUES[target.role];
+      const isUndefended = pos.kingAttackers(sq, oppColor, pos.board.occupied).isEmpty();
+      const isHigherVal = targetVal > attackerVal;
+      if (isUndefended || isHigherVal) {
+        candidates.push({ target, sq });
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  const hasKing = candidates.some((c) => c.target.role === "king");
+  let qualifying = candidates;
+  if (!hasKing) {
+    qualifying = candidates.filter((c) => PIECE_VALUES[c.target.role] >= 3);
+  }
+
+  if (qualifying.length < 2) return null;
+
+  qualifying.sort((a, b) => {
+    const rankA = a.target.role === "king" ? 100 : PIECE_VALUES[a.target.role];
+    const rankB = b.target.role === "king" ? 100 : PIECE_VALUES[b.target.role];
+    return rankB !== rankA ? rankB - rankA : a.sq - b.sq;
+  });
+
+  return [qualifying[0], qualifying[1]];
+}
+
+/**
+ * Detect a fork by the moved piece or the best reply piece.
+ * A fork attacks two or more high value or undefended pieces.
+ * If the moved piece forks, return the fork fact.
+ * If the best reply forks, return the reply fork fact.
+ */
+export function computeForkFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalAfter?: EngineEval | null
+): string | null {
+  const moverColor = posBefore.turn;
+  let toSq = move.to;
+  const pieceBefore = posBefore.board.get(move.from);
+  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
+    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
+  }
+
+  // Check moved piece
+  const pair = checkForkOnBoard(boardAfter, toSq, moverColor);
+  if (pair) {
+    const moveSan = makeSan(posBefore, move);
+    const p1Name = pair[0].target.role;
+    const sq1Name = makeSquare(pair[0].sq);
+    const p2Name = pair[1].target.role;
+    const sq2Name = makeSquare(pair[1].sq);
+    return `${moveSan} forks the ${p1Name} on ${sq1Name} and the ${p2Name} on ${sq2Name}.`;
+  }
+
+  // Check best reply piece
+  if (
+    evalAfter &&
+    evalAfter.pvs &&
+    evalAfter.pvs.length > 0 &&
+    evalAfter.pvs[0].moves &&
+    evalAfter.pvs[0].moves.length > 0
+  ) {
+    const replyUci = evalAfter.pvs[0].moves[0];
+    const replyMove = parseUci(replyUci);
+    if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
+      const sim = boardAfter.clone();
+      const replySan = makeSan(boardAfter, replyMove);
+      sim.play(replyMove);
+      let replyTo = replyMove.to;
+      const rPieceBefore = boardAfter.board.get(replyMove.from);
+      const oppColor = opposite(moverColor);
+      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
+        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
+      }
+      const pairReply = checkForkOnBoard(sim, replyTo, oppColor);
+      if (pairReply) {
+        const p1Name = pairReply[0].target.role;
+        const sq1Name = makeSquare(pairReply[0].sq);
+        const p2Name = pairReply[1].target.role;
+        const sq2Name = makeSquare(pairReply[1].sq);
+        return `${replySan} forks the ${p1Name} on ${sq1Name} and the ${p2Name} on ${sq2Name}.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+function checkPinOnBoard(
+  pos: Chess,
+  sliderSq: number,
+  sliderColor: Color
+): { fSq: number; fP: { role: Role; color: Color }; sSq: number; sP: { role: Role; color: Color } } | null {
+  const slider = pos.board.get(sliderSq);
+  if (!slider || (slider.role !== "bishop" && slider.role !== "rook" && slider.role !== "queen")) {
+    return null;
+  }
+
+  const oppColor = opposite(sliderColor);
+  const directions = getRayDirections(slider.role);
+  interface PinCandidate {
+    rank: number;
+    fSq: number;
+    fP: { role: Role; color: Color };
+    sSq: number;
+    sP: { role: Role; color: Color };
+  }
+  const candidates: PinCandidate[] = [];
+
+  for (const [dr, dc] of directions) {
+    const { firstSq, firstPiece, secondSq, secondPiece } = scanRay(pos, sliderSq, dr, dc);
+    if (firstSq === null || !firstPiece || firstPiece.color !== oppColor) continue;
+    if (firstPiece.role === "king") continue;
+    if (secondSq === null || !secondPiece || secondPiece.color !== oppColor) continue;
+
+    const fVal = PIECE_VALUES[firstPiece.role];
+    const sVal = PIECE_VALUES[secondPiece.role];
+
+    const isAbsolute = secondPiece.role === "king";
+    const isRelative = (secondPiece.role === "queen" || secondPiece.role === "rook") && sVal > fVal;
+
+    if (isAbsolute || isRelative) {
+      const rank = isAbsolute ? 100 : sVal;
+      candidates.push({ rank, fSq: firstSq, fP: firstPiece, sSq: secondSq, sP: secondPiece });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => (a.rank !== b.rank ? b.rank - a.rank : a.fSq - b.fSq));
+  const top = candidates[0];
+  return { fSq: top.fSq, fP: top.fP, sSq: top.sSq, sP: top.sP };
+}
+
+/**
+ * Detect a pin by the moved piece or the best reply piece.
+ * A pin holds a piece in front of a more valuable piece.
+ * If the moved piece pins, return the pin fact.
+ * If the best reply pins, return the reply pin fact.
+ */
+export function computePinFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalAfter?: EngineEval | null
+): string | null {
+  const moverColor = posBefore.turn;
+  let toSq = move.to;
+  const pieceBefore = posBefore.board.get(move.from);
+  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
+    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
+  }
+
+  // Check moved piece
+  const res = checkPinOnBoard(boardAfter, toSq, moverColor);
+  if (res) {
+    const moveSan = makeSan(posBefore, move);
+    const pName = res.fP.role;
+    const sqName = makeSquare(res.fSq);
+    const tgtName = res.sP.role;
+    const tgtSq = makeSquare(res.sSq);
+    return `${moveSan} pins the ${pName} on ${sqName} to the ${tgtName} on ${tgtSq}.`;
+  }
+
+  // Check best reply piece
+  if (
+    evalAfter &&
+    evalAfter.pvs &&
+    evalAfter.pvs.length > 0 &&
+    evalAfter.pvs[0].moves &&
+    evalAfter.pvs[0].moves.length > 0
+  ) {
+    const replyUci = evalAfter.pvs[0].moves[0];
+    const replyMove = parseUci(replyUci);
+    if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
+      const sim = boardAfter.clone();
+      const replySan = makeSan(boardAfter, replyMove);
+      sim.play(replyMove);
+      let replyTo = replyMove.to;
+      const rPieceBefore = boardAfter.board.get(replyMove.from);
+      const oppColor = opposite(moverColor);
+      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
+        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
+      }
+      const resReply = checkPinOnBoard(sim, replyTo, oppColor);
+      if (resReply) {
+        const pName = resReply.fP.role;
+        const sqName = makeSquare(resReply.fSq);
+        const tgtName = resReply.sP.role;
+        const tgtSq = makeSquare(resReply.sSq);
+        return `${replySan} pins the ${pName} on ${sqName} to the ${tgtName} on ${tgtSq}.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+function checkSkewerOnBoard(
+  pos: Chess,
+  sliderSq: number,
+  sliderColor: Color
+): { fSq: number; fP: { role: Role; color: Color }; sSq: number; sP: { role: Role; color: Color } } | null {
+  const slider = pos.board.get(sliderSq);
+  if (!slider || (slider.role !== "bishop" && slider.role !== "rook" && slider.role !== "queen")) {
+    return null;
+  }
+
+  const oppColor = opposite(sliderColor);
+  const directions = getRayDirections(slider.role);
+  interface SkewerCandidate {
+    fVal: number;
+    sVal: number;
+    fSq: number;
+    fP: { role: Role; color: Color };
+    sSq: number;
+    sP: { role: Role; color: Color };
+  }
+  const candidates: SkewerCandidate[] = [];
+
+  for (const [dr, dc] of directions) {
+    const { firstSq, firstPiece, secondSq, secondPiece } = scanRay(pos, sliderSq, dr, dc);
+    if (firstSq === null || !firstPiece || firstPiece.color !== oppColor) continue;
+    if (firstPiece.role !== "king" && firstPiece.role !== "queen" && firstPiece.role !== "rook") continue;
+    if (secondSq === null || !secondPiece || secondPiece.color !== oppColor) continue;
+    if (secondPiece.role === "king") continue;
+
+    const fVal = firstPiece.role === "king" ? 100 : PIECE_VALUES[firstPiece.role];
+    const sVal = PIECE_VALUES[secondPiece.role];
+
+    if (sVal <= fVal && sVal >= 1) {
+      candidates.push({ fVal, sVal, fSq: firstSq, fP: firstPiece, sSq: secondSq, sP: secondPiece });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) =>
+    a.fVal !== b.fVal ? b.fVal - a.fVal : a.sVal !== b.sVal ? b.sVal - a.sVal : a.fSq - b.fSq
+  );
+  const top = candidates[0];
+  return { fSq: top.fSq, fP: top.fP, sSq: top.sSq, sP: top.sP };
+}
+
+/**
+ * Detect a skewer by the moved piece or the best reply piece.
+ * A skewer attacks a high value piece with a piece behind it.
+ * If the moved piece skewers, return the skewer fact.
+ * If the best reply skewers, return the reply skewer fact.
+ */
+export function computeSkewerFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalAfter?: EngineEval | null
+): string | null {
+  const moverColor = posBefore.turn;
+  let toSq = move.to;
+  const pieceBefore = posBefore.board.get(move.from);
+  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
+    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
+  }
+
+  // Check moved piece
+  const res = checkSkewerOnBoard(boardAfter, toSq, moverColor);
+  if (res) {
+    const moveSan = makeSan(posBefore, move);
+    const p1Name = res.fP.role;
+    const sq1Name = makeSquare(res.fSq);
+    const p2Name = res.sP.role;
+    const sq2Name = makeSquare(res.sSq);
+    return `${moveSan} skewers the ${p1Name} on ${sq1Name} and the ${p2Name} on ${sq2Name}.`;
+  }
+
+  // Check best reply piece
+  if (
+    evalAfter &&
+    evalAfter.pvs &&
+    evalAfter.pvs.length > 0 &&
+    evalAfter.pvs[0].moves &&
+    evalAfter.pvs[0].moves.length > 0
+  ) {
+    const replyUci = evalAfter.pvs[0].moves[0];
+    const replyMove = parseUci(replyUci);
+    if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
+      const sim = boardAfter.clone();
+      const replySan = makeSan(boardAfter, replyMove);
+      sim.play(replyMove);
+      let replyTo = replyMove.to;
+      const rPieceBefore = boardAfter.board.get(replyMove.from);
+      const oppColor = opposite(moverColor);
+      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
+        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
+      }
+      const resReply = checkSkewerOnBoard(sim, replyTo, oppColor);
+      if (resReply) {
+        const p1Name = resReply.fP.role;
+        const sq1Name = makeSquare(resReply.fSq);
+        const p2Name = resReply.sP.role;
+        const sq2Name = makeSquare(resReply.sSq);
+        return `${replySan} skewers the ${p1Name} on ${sq1Name} and the ${p2Name} on ${sq2Name}.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect a discovered attack created by moving a piece.
+ * Moving a piece unblocks a friendly sliding piece attack.
+ * If an attack opens against a king, queen, rook, or undefended minor piece, return the fact.
+ */
+export function computeDiscoveredAttackFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess
+): string | null {
+  const moverColor = posBefore.turn;
+  const oppColor = opposite(moverColor);
+  const fromSq = move.from;
+  let toSq = move.to;
+  const pieceBefore = posBefore.board.get(move.from);
+  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
+    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
+  }
+
+  interface DiscCandidate {
+    targetVal: number;
+    sq1: number;
+    slider: { role: Role; color: Color };
+    sq2: number;
+    target: { role: Role; color: Color };
+  }
+  const candidates: DiscCandidate[] = [];
+
+  for (let sq1 = 0; sq1 < 64; sq1++) {
+    const slider = boardAfter.board.get(sq1);
+    if (!slider || slider.color !== moverColor) continue;
+    if (slider.role !== "bishop" && slider.role !== "rook" && slider.role !== "queen") continue;
+    if (sq1 === toSq) continue;
+
+    const att = attacks(slider, sq1, boardAfter.board.occupied);
+    for (const sq2 of att) {
+      const target = boardAfter.board.get(sq2);
+      if (!target || target.color !== oppColor) continue;
+
+      let targetVal = 0;
+      if (target.role === "king") {
+        targetVal = 100;
+      } else if (target.role === "queen" || target.role === "rook") {
+        targetVal = PIECE_VALUES[target.role];
+      } else if (target.role === "bishop" || target.role === "knight") {
+        if (boardAfter.kingAttackers(sq2, oppColor, boardAfter.board.occupied).isEmpty()) {
+          targetVal = PIECE_VALUES[target.role];
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
+
+      if (isBetween(fromSq, sq1, sq2)) {
+        const attBefore = attacks(slider, sq1, posBefore.board.occupied);
+        if (!attBefore.has(sq2)) {
+          candidates.push({ targetVal, sq1, slider, sq2, target });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => (a.targetVal !== b.targetVal ? b.targetVal - a.targetVal : a.sq1 - b.sq1));
+  const top = candidates[0];
+  const moveSan = makeSan(posBefore, move);
+  const sliderName = top.slider.role;
+  const sq1Name = makeSquare(top.sq1);
+  const targetName = top.target.role;
+  const sq2Name = makeSquare(top.sq2);
+  return `${moveSan} opens a discovered attack from the ${sliderName} on ${sq1Name} against the ${targetName} on ${sq2Name}.`;
+}
+
+/**
+ * Detect a forced checkmate or checkmate threat from engine evaluations.
+ * If the mover has forced mate, report the moves to mate.
+ * If the opponent has forced mate, report the checkmate threat.
+ */
+export function computeMateThreatFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalAfter?: EngineEval | null
+): string | null {
+  if (!evalAfter || !evalAfter.pvs || evalAfter.pvs.length === 0) return null;
+  const pv = evalAfter.pvs[0];
+  if (!pv.score || pv.score.type !== "mate") return null;
+  const val = Math.trunc(Number(pv.score.value ?? 0));
+  if (val === 0) return null;
+  if (!pv.moves || pv.moves.length === 0) return null;
+
+  const replyMove = parseUci(pv.moves[0]);
+  if (!replyMove || !isNormal(replyMove) || !boardAfter.isLegal(replyMove)) return null;
+
+  const replySan = makeSan(boardAfter, replyMove);
+  const moverColor = posBefore.turn;
+  const moverName = moverColor === "white" ? "White" : "Black";
+  const oppName = moverColor === "white" ? "Black" : "White";
+  const moverHasMate = moverColor === "white" ? val > 0 : val < 0;
+  const n = Math.abs(val);
+  const movesStr = n === 1 ? "move" : "moves";
+
+  if (moverHasMate) {
+    return `${moverName} has a forced checkmate in ${n} ${movesStr} starting with ${replySan}.`;
+  }
+  return `${oppName} threatens checkmate with ${replySan}.`;
+}
+
+/**
+ * Explain what the best move accomplishes when the played move is bad.
+ * When the verdict is Inaccuracy, Mistake, or Blunder, check the best move.
+ * Report if the best move captures a piece, defends a hanging piece, or prepares castling.
+ */
+export function computeRefutationReasonFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalBefore: EngineEval,
+  evalAfter?: EngineEval | null,
+  moveUci?: string | null
+): string | null {
+  const actualMoveUci =
+    moveUci ??
+    `${makeSquare(move.from)}${makeSquare(move.to)}${move.promotion ? move.promotion[0] : ""}`;
+  const verdict = classifyVerdict(evalBefore, evalAfter, actualMoveUci);
+  if (verdict !== "Inaccuracy" && verdict !== "Mistake" && verdict !== "Blunder") {
+    return null;
+  }
+
+  const pvs = evalBefore.pvs ?? [];
+  if (pvs.length === 0 || !pvs[0].moves || pvs[0].moves.length === 0) return null;
+  const bestUci = pvs[0].moves[0];
+  if (bestUci === actualMoveUci) return null;
+
+  const bestMove = parseUci(bestUci);
+  if (!bestMove || !isNormal(bestMove) || !posBefore.isLegal(bestMove)) return null;
+
+  const bestSan = makeSan(posBefore, bestMove);
+  const moverColor = posBefore.turn;
+  const oppColor = opposite(moverColor);
+  let bestTo = bestMove.to;
+  const pieceBefore = posBefore.board.get(bestMove.from);
+  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(bestMove.to)) {
+    bestTo = kingCastlesTo(moverColor, bestMove.to > bestMove.from ? "h" : "a");
+  }
+
+  // 1. Best move captures a piece
+  const targetBefore = posBefore.board.get(bestTo);
+  const isEnPassant = pieceBefore?.role === "pawn" && posBefore.epSquare === bestTo;
+  if (targetBefore && targetBefore.color === oppColor) {
+    const targetName = targetBefore.role;
+    const sqName = makeSquare(bestTo);
+    return `Best move ${bestSan} captures the ${targetName} on ${sqName}.`;
+  }
+  if (isEnPassant) {
+    const sqName = makeSquare(bestTo);
+    return `Best move ${bestSan} captures the pawn on ${sqName}.`;
+  }
+
+  // 2. Best move defends a hanging piece
+  const sim = posBefore.clone();
+  sim.play(bestMove);
+  const bestPieceAfter = sim.board.get(bestTo);
+  if (bestPieceAfter) {
+    const bestAttacks = attacks(bestPieceAfter, bestTo, sim.board.occupied);
+    interface DefCandidate {
+      val: number;
+      sq: number;
+      role: Role;
+    }
+    const defCandidates: DefCandidate[] = [];
+
+    for (const sq of bestAttacks) {
+      if (sq !== bestTo) {
+        const p = sim.board.get(sq);
+        if (p && p.color === moverColor && p.role !== "king") {
+          const wasAttacked = posBefore.kingAttackers(sq, oppColor, posBefore.board.occupied).nonEmpty();
+          const wasDefended = posBefore.kingAttackers(sq, moverColor, posBefore.board.occupied).nonEmpty();
+          if (wasAttacked && !wasDefended) {
+            defCandidates.push({ val: PIECE_VALUES[p.role], sq, role: p.role });
+          }
+        }
+      }
+    }
+
+    if (defCandidates.length > 0) {
+      defCandidates.sort((a, b) => (a.val !== b.val ? b.val - a.val : a.sq - b.sq));
+      const top = defCandidates[0];
+      const pieceName = top.role;
+      const sqName = makeSquare(top.sq);
+      return `Best move ${bestSan} defends the ${pieceName} on ${sqName}.`;
+    }
+  }
+
+  // 3. Best move develops a piece and prepares castling
+  const hasCastlingRights =
+    posBefore.castles.rook[moverColor].a !== undefined ||
+    posBefore.castles.rook[moverColor].h !== undefined;
+  if (hasCastlingRights && posBefore.fullmoves <= 12) {
+    if (pieceBefore && (pieceBefore.role === "knight" || pieceBefore.role === "bishop")) {
+      const startSqs =
+        moverColor === "white"
+          ? [1, 2, 5, 6] // b1, c1, f1, g1
+          : [57, 58, 61, 62]; // b8, c8, f8, g8
+      if (startSqs.includes(bestMove.from)) {
+        const pieceName = pieceBefore.role;
+        return `Best move ${bestSan} develops the ${pieceName} and prepares castling.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Append shared position facts to rawFacts.
+ * Extract hanging pieces, checks, captures, threats, and king safety.
+ * Extract material balance, phase, and opening facts.
+ */
 export function appendPositionFacts(
   board: Chess,
   fen: string,
@@ -904,7 +1542,15 @@ export function extractFacts(
       rawFacts.push(f);
     }
 
-    // 4-10. Shared position facts
+    // Tactical motifs
+    rawFacts.push(computeForkFact(posBefore, move, posAfter, evalAfter));
+    rawFacts.push(computePinFact(posBefore, move, posAfter, evalAfter));
+    rawFacts.push(computeSkewerFact(posBefore, move, posAfter, evalAfter));
+    rawFacts.push(computeDiscoveredAttackFact(posBefore, move, posAfter));
+    rawFacts.push(computeMateThreatFact(posBefore, move, posAfter, evalAfter));
+    rawFacts.push(computeRefutationReasonFact(posBefore, move, posAfter, evalBefore, evalAfter, moveUci));
+
+    // Shared position facts
     appendPositionFacts(posAfter, fen, moveUci, rawFacts);
   } else if (task === "explain_position") {
     // 1. Candidate moves fact

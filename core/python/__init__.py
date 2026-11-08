@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from .facts import (
     classify_verdict,
+    compute_discovered_attack_fact,
+    compute_fork_fact,
+    compute_mate_threat_fact,
+    compute_pin_fact,
+    compute_refutation_reason_fact,
+    compute_skewer_fact,
     extract_facts,
     win_chance,
 )
@@ -32,4 +38,10 @@ __all__ = [
     "classify_verdict",
     "OPENING_BOOK",
     "lookup_opening",
+    "compute_fork_fact",
+    "compute_pin_fact",
+    "compute_skewer_fact",
+    "compute_discovered_attack_fact",
+    "compute_mate_threat_fact",
+    "compute_refutation_reason_fact",
 ]

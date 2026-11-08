@@ -29,6 +29,12 @@ export {
   computeThreatFact,
   computeMovedPieceAttackFact,
   computeReplyAndMaterialChangeFacts,
+  computeForkFact,
+  computePinFact,
+  computeSkewerFact,
+  computeDiscoveredAttackFact,
+  computeMateThreatFact,
+  computeRefutationReasonFact,
   appendPositionFacts,
   extractFacts,
 } from "./facts.js";
