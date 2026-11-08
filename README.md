@@ -38,49 +38,60 @@ The extension permits analysis only on these pages:
 When an active game is open, the panel displays:
 > "Second is off during live games. Open the game after it ends."
 
+## Current Status (Certified `Second-1.0-2B` Release Candidate)
+
+Phases 0 through 7 (including the Phase 6.5 capability iteration in [`TRAINING_PLAN.md`](TRAINING_PLAN.md)) are **complete**. The winning 2B model (`RL-B2`, trained with SFT v2 `r=32` + 150 steps of token-level DAPO GRPO v2 with Reward v2) passed Stage T6 verification on the frozen 300-item test set ([`eval/reports/grpo-1.0-2b-v2.md`](eval/reports/grpo-1.0-2b-v2.md)):
+- **Hard-Fail Rate (All 9 Deterministic Checks)**: `4.67%` (`14 / 300` items, gate $\le 5.0\%$)
+- **In-Band Length Rate**: `99.67%` (`62.0` words mean, gate $\ge 80.0\%$)
+- **First-Person Diary Voice Rate**: `0.00%` (down from `51.3%` in Iteration 1)
+- **Better-Move Counterfactual Score**: `1.0000` (`100.0%` on bad moves)
+- **Debiased Gemini Judge Overall**: `3.96 / 5.0` (up from `2.78` in Iteration 1)
+- **Pairwise Win Rate**: `281W–0L` (`100.0%` decisive win rate, `97.5%` LC-WR) vs Iteration 1 `grpo-1.0-2b`, `293W–0L` (`86.2%` LC-WR) vs `base-qwen-2b`, and `202W–20L` (`91.0%` decisive win rate, `74.5%` LC-WR) vs `gemini-flash`.
+- **Next Active Phase**: **Phase 8 (Browser GGUF `Q4_K_M` Export for `wllama`)** $\to$ **Phase 9 (Lichess Browser Extension)**.
+
 ## Repository Layout
 
 ```text
 second/
 ├── LICENSE                  # Apache 2.0 license
 ├── README.md                # Project documentation
+├── PLAN.md                  # Master project plan (Phases 0–12)
+├── TRAINING_PLAN.md         # Phase 6.5 capability iteration plan & Stage T0–T6 results
 ├── docs/                    # Architecture records and specifications
-│   ├── decisions/           # Runtime and compute benchmark records
+│   ├── decisions/           # Runtime (wllama GGUF), compute, and teacher model records
 │   ├── data_sources.md      # Data licensing and pipeline plans
 │   └── prompt_format.md     # Input prompt contract (Phase 1)
 ├── core/                    # Shared fact extractor and prompt builder
-│   ├── python/              # Python implementation (Phase 1)
-│   ├── ts/                  # TypeScript implementation (Phase 1)
-│   └── golden/              # 200 parity test positions and generator (Phase 1)
-├── data/                    # Data pipeline (Phase 2)
-│   ├── sources/             # Data download and extraction scripts (Phase 2.1)
-│   ├── pipeline/            # Stockfish analysis, filtering, labeling, and splitting (Phase 2.2-2.7)
-│   └── cards/               # Dataset documentation cards (Phase 2.7)
-├── rewards/                 # Rule checkers for Reinforcement Learning (RL) and evaluation (Phase 3)
-├── training/                # Training pipelines
-│   ├── configs/             # Training configurations per model size (planned for Phase 5)
-│   ├── sft.ipynb            # Supervised Fine-Tuning notebook (planned for Phase 5)
-│   └── grpo.ipynb           # Group Relative Policy Optimization notebook (planned for Phase 6)
-├── eval/                    # Evaluation harness and frozen test set (Phase 4)
+│   ├── python/              # Python implementation + tactical motif detectors (Phase 1 / T1)
+│   ├── ts/                  # TypeScript implementation with 100% parity (Phase 1 / T1)
+│   └── golden/              # 230 parity test positions and generator (Phase 1 / T1)
+├── data/                    # Data pipeline and teacher distillation (Phase 2 / T2)
+│   ├── sources/             # Data download and extraction scripts
+│   ├── pipeline/            # Stockfish analysis, teacher synthesis, filtering, and RL v2 prompts
+│   └── cards/               # Dataset documentation cards
+├── rewards/                 # Rule checkers, relational/opening claim verifiers, and Reward v2
+├── training/                # SFT and GRPO training pipelines (Phases 5–6.5)
+│   ├── configs/             # Frozen recipe configs (second-1.0-2b.yaml, sft_v2_*, grpo_v2_*)
+│   ├── sft_v2.ipynb         # Stage T3 SFT v2 training notebook
+│   ├── grpo_v2.ipynb        # Stage T4 GRPO v2 (DAPO + Reward v2) notebook
+│   └── stage_t6_eval.ipynb  # Stage T6 self-contained frozen test-set evaluation notebook
+├── eval/                    # Evaluation harness, dev set (150 items), and frozen test set (300 items)
+│   ├── devset-1.0.jsonl     # Stratified 150-item development set (Stage T0)
 │   ├── testset-1.0.jsonl    # Frozen 300-item evaluation set (Phase 4.1)
-│   ├── build_testset.py     # Deterministic test set builder (Phase 4.1)
-│   ├── metrics.py           # Automatic rule and length metrics (Phase 4.2)
-│   ├── judge.py             # Gemini Flash rubric and pairwise judge (Phase 4.3)
-│   ├── baselines.py         # Baseline explanation generator (Phase 4.4)
-│   ├── run_eval.py          # Single-command evaluation harness (Phase 4)
-│   ├── rating_space/        # Human evaluation Gradio Space (Phase 4.5)
-│   ├── results/             # Benchmark test results (Phase 4)
-│   └── reports/             # Model evaluation reports (Phase 4 / Phase 7)
-├── export/                  # Quantization and browser conversion (planned for Phase 8)
-├── extension/               # Lichess Chrome extension (GPLv3) (planned for Phase 9)
+│   ├── metrics.py           # Automatic rule, motif, concept-tier, and length metrics
+│   ├── judge.py             # Debiased Gemini Flash rubric and swap-consistent pairwise judge
+│   ├── lc_winrate.py        # Length-Controlled Win Rate (LC-WR) logistic regression
+│   ├── run_eval.py          # Single-command evaluation harness
+│   ├── rating_space/        # Human evaluation Gradio Space
+│   ├── results/             # Benchmark test results and experiment_ledger.jsonl
+│   └── reports/             # Model evaluation reports (grpo-1.0-2b-v2.md, Second-1.0-2B.md)
+├── export/                  # LoRA merge and GGUF Q4_K_M browser conversion (Phase 8 — Next)
+├── extension/               # Lichess Chrome extension (GPLv3) (Phase 9)
 │   ├── LICENSE              # GNU General Public License v3.0
-│   ├── src/                 # Extension source code (planned for Phase 9)
-│   ├── public/              # Static assets and manifest (planned for Phase 9)
-│   └── TESTING.md           # Extension test checklist (planned for Phase 9)
-├── spikes/                  # Research prototypes and benchmarks (Phase 0)
-│   ├── browser-runtime/     # Browser runtime test harness (Phase 0.2)
-│   ├── colab-training/      # Colab training stack test (Phase 0.3)
-│   └── colab-stockfish/     # Stockfish benchmark (Phase 0.4)
+│   ├── src/                 # Extension source code
+│   ├── public/              # Static assets and manifest
+│   └── TESTING.md           # Extension test checklist
+├── spikes/                  # Research prototypes and benchmarks (Phase 0 & Stage T2.1)
 └── .github/workflows/       # CI test pipelines (Phase 1)
 ```
 

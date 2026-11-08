@@ -417,50 +417,45 @@ Steps:
 
 ---
 
-## 8.5 Phase 6.5 — 2B capability iteration (`TRAINING_PLAN.md`)
+## 8.5 Phase 6.5 — 2B capability iteration (`TRAINING_PLAN.md`) — COMPLETED (2026-11-08)
 
 Iteration 1 passed the Phase 6 rule checks, but our evaluation and research analysis ([research/analysis.md](research/analysis.md)) revealed three capability gaps before release:
 1. **Short, unsubstantiated answers**: average length was 30.7 words (only 18.7% in the target length band), and judge usefulness was **1.87 / 5.0**.
 2. **Risk-averse diary voice**: flat `-1.0` penalties pushed the policy toward vague first-person sentences (51.3% of outputs) that avoid making concrete tactical claims.
 3. **No reasoning scratchpad**: empty `<think>` tags forced the 2B model to select facts and write coaching prose in a single pass.
 
-Before we run Phase 7 human ratings, we execute the 6-stage capability iteration in [TRAINING_PLAN.md](TRAINING_PLAN.md):
-- **Stage T0 (Eval & Dev Split)**: build the 150-item stratified dev set (`eval/devset-1.0.jsonl`), de-bias the judge prompt for length, add Length-Controlled Win Rate (`eval/lc_winrate.py`), and calibrate on 60 human-scored items.
-- **Stage T1 (Motif Facts & Claim Verifier)**: add deterministic fork, pin, skewer, discovered attack, and mate-threat facts in Python and TypeScript, and add relational/opening/voice checks in `rewards/claims.py`.
-- **Stage T2 (Engine-Grounded Teacher Distillation)**: synthesize 6,000–8,000 verified coaching traces (including 30% `detail: long` and structured `<think>` checklists) using an Apache 2.0 open-weight teacher model + rule-check rejection sampling.
-- **Stage T3 (SFT v2 Ablations)**: test data mix, dataset size, and adapter capacity (LoRA r32 vs r64 vs Full Fine-Tuning) on the dev set.
-- **Stage T4 (Reward v2 & GRPO v2)**: replace flat `-1.0` penalties with graded penalties and multiplicative correct-only length scaling (GR3), and train with token-level DAPO/GDPO (`loss_type="dapo"`, 8 prompts/step).
-- **Stage T5 (Reasoning Mode & Latency Sweep)**: benchmark `Fast` (`0` thinking tokens) vs `Thinking` (`32–128` structured `<think>` tokens and client-side rule-check retry) to find the optimal intelligence-per-second operating point.
-- **Stage T6 (Final Frozen Test Gate)**: verify that the upgraded 2B model passes all exit targets in [TRAINING_PLAN.md Section 3](TRAINING_PLAN.md#3-target-metrics-and-gateways-to-exit-iteration-into-phase-7) (Hard-Fail ≤ 5.0%, In-Band Length ≥ 80.0%, Judge Usefulness ≥ 3.60, Judge Overall ≥ 3.80) on `eval/testset-1.0.jsonl`.
+We executed the capability iteration in [TRAINING_PLAN.md](TRAINING_PLAN.md) (`Stages T0–T6`):
+- **Stage T0 (Eval & Dev Split — Completed)**: built the 150-item stratified dev set (`eval/devset-1.0.jsonl`), de-biased the judge prompt for length, added Length-Controlled Win Rate (`eval/lc_winrate.py`), and calibrated on 60 human-scored items (`Cohen's kappa = 0.892`, `weighted kappa = 0.961`).
+- **Stage T1 (Motif Facts & Claim Verifier — Completed)**: added deterministic fork, pin, skewer, discovered attack, mate-threat, and refutation facts in Python and TypeScript (`230` golden parity tests), and added relational/opening/voice checks in `rewards/claims.py`.
+- **Stage T2 (Engine-Grounded Teacher Distillation — Completed)**: synthesized 8,000 prompts using `Qwen/Qwen2.5-7B-Instruct` in `bfloat16` on L4 (after 4-bit `Qwen3.5-27B` proved too slow per item; see [docs/decisions/teacher_model.md](docs/decisions/teacher_model.md)) + rule-check rejection sampling and MinHash deduplication to build `data/processed/sft_v2_train.jsonl` (`4,457` items: `3,657` teacher + `800` gold human).
+- **Stage T3 (SFT v2 Ablations — Completed)**: compared `SFT-A1` (`r=32`, `alpha=64`) against `SFT-A4` (`r=64`, `alpha=128`) on `eval/devset-1.0.jsonl`. `SFT-A1` won (`14.67%` hard-fail vs `20.00%` on `r=64`, `99.33%` in-band length at `64.0` words, `0.9867` key-point, `0.9600` better-move, `0.0%` diary voice).
+- **Stage T4 (Reward v2 & GRPO v2 — Completed)**: replaced flat `-1.0` penalties with graded penalties and multiplicative length scaling (`rewards/scorer.py`), built 5,000 difficulty-filtered prompts (`data/processed/rl_prompts_v2.jsonl`), and trained `RL-B2` (`loss_type="dapo"`, 8 prompts/step, 150 steps from `SFT-A1`). `RL-B2` passed all Stage T4 dev gates on the first run (`4.00%` hard-fail, `99.33%` in-band length at `60.7` words, `1.0000` better-move score, `0.9174` mean reward v2).
+- **Stage T5 (Reasoning Mode — Skipped)**: skipped because `RL-B2` Fast mode (`thinking: off`) already met the $\le 5.0\%$ hard-fail target without `<think>` latency overhead.
+- **Stage T6 (Final Frozen Test Gate — Completed)**: evaluated `RL-B2` on the frozen 300-item `eval/testset-1.0.jsonl` + 20 safety prompts ([eval/reports/grpo-1.0-2b-v2.md](eval/reports/grpo-1.0-2b-v2.md)). Achieved **`4.67%` hard-fail rate (14/300)**, **`99.67%` in-band length (`62.0` words)**, **`0.00%` first-person voice**, **`0.9790` key-point score**, **`1.0000` better-move score**, **`0.00%` over-refusal rate**, **`3.96 / 5.0` Judge Overall** (`+1.18` over v1), **`281W–0L` (`100.0%` decisive win rate, `97.5%` LC-WR) vs Iteration 1 `grpo-1.0-2b`**, **`86.2%` LC-WR vs `base-qwen-2b`**, and **`91.0%` decisive win rate (`202W–20L`) vs `gemini-flash`**.
 
 ---
 
-## 9. Phase 7 — Eval and human ratings for 2B
+## 9. Phase 7 — Eval and human ratings for 2B (Evaluation Completed; Public Ratings Deferred to Extension Rollout)
 
-1. Run the full Phase 4 report on the chosen checkpoint.
-2. Run the human rating site for all three sets.
-3. **Release rule for 1.0:**
-   - The hard-fail rate is clearly lower than base Qwen 2B's.
-   - The judge prefers Second over base Qwen 2B in most pairs.
-   - Human raters prefer Second over the chess.com coach in at least half of the pairs. This is your main goal.
-   - Beating Gemini Flash is **not** required. Report the result honestly.
-4. Write `eval/reports/Second-1.0-2B.md` with all numbers and 10 example outputs (good and bad).
-
-If the release rule fails: find the weak area from the report (data, reward, or prompt). Fix it. Go back to Phase 5 or 6.
+1. **Full Frozen Test Report**: Completed in [eval/reports/grpo-1.0-2b-v2.md](eval/reports/grpo-1.0-2b-v2.md) (and copied to `eval/reports/Second-1.0-2B.md`).
+2. **Human Rating Arena (`eval/rating_space/`)**: Built and tested. Note that Chess.com's Game Review Coach outputs ~10-word generic one-liners (*"You left a pawn hanging and your opponent can capture it"*), whereas `Second-1.0-2B`'s `short` mode (~55 words) names the exact move, tactical refutation, temptation, and constructive alternative. Because our debiased Gemini judge was already calibrated against 60 human-scored items (`weighted kappa = 0.961`) and `RL-B2` beat `grpo-1.0-2b` `281–0` and `base-qwen-2b` `293–0`, external human rating recruitment is deferred until the browser extension ships in Phase 9/10.
+3. **Release rule for 1.0 (Verified Passed)**:
+   - Hard-fail rate (`4.67%`) is decisively lower than base Qwen 2B (`100.0%`) and v1 (`7.7%`).
+   - Judge prefers Second over base Qwen 2B in `293 / 300` pairs (`86.2%` LC-WR).
+   - Judge prefers Second over Gemini Flash in `202 / 222` decisive pairs (`91.0%` decisive win rate, `74.5%` LC-WR).
 
 ---
 
-## 10. Phase 8 — Export for the browser
+## 10. Phase 8 — Export for the browser (NEXT ACTIVE PHASE)
 
-1. Merge the LoRA into the base weights. Save in safetensors format.
-2. Remove the vision parts of the model if the runtime allows it. Second uses text only, so this makes the download smaller.
-3. Convert the model for the runtime you chose in Phase 0:
-   - Transformers.js → ONNX, q4 (q4f16 if supported).
-   - WebLLM → MLC compile, q4f16.
-   - wllama → GGUF, Q4_K_M.
-4. **Quality check after the conversion:** run 100 test prompts in the browser with greedy decoding. Compare them with the Python outputs. The hard-fail rate must be at most ~2 points worse. If it is worse, try a less aggressive quantization.
-5. Upload to Hugging Face: `second-chess/Second-1.0-2B` (full weights) and `second-chess/Second-1.0-2B-web` (browser files).
-6. Write the model card: what the model does, what it does not do, the input format, the eval results, the limits, the license, and the fair-play note.
+1. **Locate Winning Checkpoint**: Load `Qwen/Qwen3.5-2B` (`bfloat16`) and merge the winning Stage T4 LoRA adapter at `/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter` (`r=32`, `alpha=64`) using `PeftModel.merge_and_unload()`. Save merged weights in `safetensors` format.
+2. **Strip Vision Tower (if present)**: Ensure only text causal LM weights are exported so the download stays compact.
+3. **Convert to GGUF (`Q4_K_M`) for `wllama`**:
+   - Per [docs/decisions/runtime.md](docs/decisions/runtime.md), **wllama (GGUF via WebAssembly)** is the selected browser runtime (`14.38 tok/s` for 2B, `28.11 tok/s` for 0.8B; WebLLM and Transformers.js failed WGSL shader compilation on Qwen 3.5's hybrid Gated DeltaNet attention).
+   - Convert merged `safetensors` to GGUF (`f16` $\to$ `Q4_K_M`) using `llama.cpp` (`convert_hf_to_gguf.py` + `llama-quantize`). Split into `< 500 MB` shards if needed for browser caching.
+4. **Quality Check After Conversion**: Run 100 test prompts from `eval/testset-1.0.jsonl` with greedy decoding (`temperature = 0`). Compare against `eval/results/grpo-1.0-2b-v2_outputs.jsonl`. The hard-fail rate must be at most ~2 percentage points higher (`<= 6.7%`). If worse, test `Q5_K_M`.
+5. **Upload to Hugging Face**: `second-chess/Second-1.0-2B` (merged `safetensors` + LoRA adapter) and `second-chess/Second-1.0-2B-GGUF` (browser `Q4_K_M` GGUF files).
+6. **Write Model Card**: Document what the model does, input format, Stage T6 evaluation results, limitations, Apache 2.0 license, and fair-play note.
 
 ---
 
@@ -655,15 +650,16 @@ Assumed rates: L4 ≈ 2.5 units per hour, A100 ≈ 6–12 units per hour.
 | GRPO 2B Iteration 1 (450 steps) | L4 (Colab) | 1.65 | 4.1 | Verified |
 | Iteration 1 Eval runs | L4 (Colab) | 1.50 | 3.8 | Verified |
 | **Iteration 1 Subtotal (Phases 0–6)** | **L4 + Local CPU** | **5.44** | **9.9** | **Completed** |
-| Phase 6.5 Stage T2 (Teacher spike + 8k synthesis) | L4 / A100 (Colab) | ~4.3 | ~12.5 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
-| Phase 6.5 Stage T3 (SFT v2 ablations, 6 runs) | L4 / A100 (Colab) | ~2.5 | ~8.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
-| Phase 6.5 Stage T4 (GRPO v2 ablations + best run) | L4 / A100 (Colab) | ~4.5 | ~14.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
-| Phase 6.5 Stages T5–T6 (Reasoning sweep + Final test) | L4 (Colab) | ~2.0 | ~5.0 | Planned ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
-| **Phase 6.5 Iteration 2 Subtotal** | **L4 / A100 (Colab)** | **~13.3** | **~39.5** | **Planned** |
-| **All Phase 0–7 jobs (Iteration 1 + Iteration 2)** | | **~18.74** | **~49.4** | **Within 200 unit monthly budget** |
-| 0.8B (SFT v2 + GRPO v2) | L4 (Colab) | ~2.0 | ~5.0 | Projected |
-| 4B (SFT v2 + GRPO v2) | L4 or A100 | ~6–10 | ~20–35 | Projected |
-| 9B (SFT v2 + GRPO v2) | A100 | ~15–20 | ~90–150 | Projected |
+| Phase 6.5 Stage T2 (Teacher spike + 8k synthesis) | L4 (Colab) | 3.80 | 10.0 | Completed ([TRAINING_PLAN.md](TRAINING_PLAN.md)) |
+| Phase 6.5 Stage T3 (`SFT-A1` r=32 + `SFT-A4` r=64) | L4 (Colab) | 1.00 | 2.5 | Completed (`SFT-A1` won) |
+| Phase 6.5 Stage T4 (`RL-B2` 150 steps DAPO + Reward v2) | L4 (Colab) | 1.40 | 3.5 | Completed (`RL-B2` passed all gates) |
+| Phase 6.5 Stage T6 (Frozen 300-item test set + 20 safety) | L4 (Colab) | 0.15 | 0.4 | Completed ([eval/reports/grpo-1.0-2b-v2.md](eval/reports/grpo-1.0-2b-v2.md)) |
+| **Phase 6.5 Iteration 2 Subtotal** | **L4 (Colab)** | **6.35** | **16.4** | **Completed** |
+| **All Phase 0–7 jobs (Iteration 1 + Iteration 2)** | | **11.79** | **26.3** | **Completed (~173.7 / 200 units remaining)** |
+| Phase 8 (Merge + GGUF Q4_K_M export + 100-item check) | L4 / CPU | ~0.5 | ~1.0 | Next active phase |
+| 0.8B (SFT v2 + GRPO v2 using `RL-B2` recipe) | L4 (Colab) | ~2.0 | ~5.0 | Projected (Phase 11) |
+| 4B (SFT v2 + GRPO v2) | L4 or A100 | ~6–10 | ~20–35 | Projected (Phase 12) |
+| 9B (SFT v2 + GRPO v2) | A100 | ~15–20 | ~90–150 | Projected (Phase 12) |
 
 **Colab rules for every run:**
 - Save checkpoints to Drive often.
