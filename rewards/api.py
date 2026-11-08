@@ -206,7 +206,11 @@ def parse_prompt(user_message: str) -> PromptInfo:
     )
 
 
-def score_completion(prompt: str, completion: str) -> RewardResult:
+def score_completion(
+    prompt: str,
+    completion: str,
+    reward_version: str = "v1",
+) -> RewardResult:
     """Score a model completion against a prompt string.
 
     Strip a leading thinking block from the completion.
@@ -228,6 +232,7 @@ def score_completion(prompt: str, completion: str) -> RewardResult:
         best_move_san=info.best_move_san or "",
         facts=info.facts,
         prompt_text=user_message,
+        reward_version=reward_version,
     )
 
 
@@ -264,6 +269,7 @@ def grpo_reward_fn(
     If evaluation of one sample fails, log a warning and return negative one.
     Return a list of scalar rewards.
     """
+    reward_version = str(kwargs.get("reward_version", "v1"))
     rewards: list[float] = []
 
     for prompt_item, completion_item in zip(prompts, completions):
@@ -272,13 +278,127 @@ def grpo_reward_fn(
             completion_str = _extract_content(
                 completion_item, role_target="assistant"
             )
-            result = score_completion(prompt_str, completion_str)
+            result = score_completion(
+                prompt_str, completion_str, reward_version=reward_version
+            )
             rewards.append(result.reward)
         except Exception as exc:
             logger.warning("Failed to score sample in grpo_reward_fn: %s", exc)
             rewards.append(-1.0)
 
     return rewards
+
+
+def reward_grounding_fn(
+    prompts: list[Any],
+    completions: list[Any],
+    **kwargs: Any,
+) -> list[float]:
+    """Compute grounding stream reward for MO-GRPO / GDPO.
+
+    Return 0.0 when all hard checks pass.
+    Return graded negative penalty when any hard check fails.
+    """
+    rewards: list[float] = []
+    for prompt_item, completion_item in zip(prompts, completions):
+        try:
+            prompt_str = _extract_content(prompt_item, role_target="user")
+            completion_str = _extract_content(
+                completion_item, role_target="assistant"
+            )
+            result = score_completion(
+                prompt_str, completion_str, reward_version="v2"
+            )
+            if result.passed_all_hard:
+                rewards.append(0.0)
+            else:
+                rewards.append(float(result.reward))
+        except Exception as exc:
+            logger.warning("Failed to score sample in reward_grounding_fn: %s", exc)
+            rewards.append(-1.0)
+    return rewards
+
+
+def reward_pedagogy_fn(
+    prompts: list[Any],
+    completions: list[Any],
+    **kwargs: Any,
+) -> list[float]:
+    """Compute pedagogy stream reward for MO-GRPO / GDPO.
+
+    Combine key_point and better_move multiplied by the target length multiplier.
+    Return 0.0 when any hard check fails.
+    """
+    from .scorer import V2_WEIGHT_BETTER_MOVE, V2_WEIGHT_KEY_POINT
+
+    rewards: list[float] = []
+    for prompt_item, completion_item in zip(prompts, completions):
+        try:
+            prompt_str = _extract_content(prompt_item, role_target="user")
+            completion_str = _extract_content(
+                completion_item, role_target="assistant"
+            )
+            result = score_completion(
+                prompt_str, completion_str, reward_version="v2"
+            )
+            if not result.passed_all_hard:
+                rewards.append(0.0)
+            else:
+                kp = result.soft_scores.get("key_point", 0.0)
+                bm = result.soft_scores.get("better_move", 0.0)
+                m_len = result.soft_scores.get("length_multiplier", 1.0)
+                ped_score = (V2_WEIGHT_KEY_POINT * kp + V2_WEIGHT_BETTER_MOVE * bm) * m_len
+                rewards.append(round(float(ped_score), 4))
+        except Exception as exc:
+            logger.warning("Failed to score sample in reward_pedagogy_fn: %s", exc)
+            rewards.append(0.0)
+    return rewards
+
+
+def reward_style_fn(
+    prompts: list[Any],
+    completions: list[Any],
+    **kwargs: Any,
+) -> list[float]:
+    """Compute style stream reward for MO-GRPO / GDPO.
+
+    Combine level_fit, not_copied, and no_repeats multiplied by the length multiplier.
+    Return 0.0 when any hard check fails.
+    """
+    from .scorer import (
+        V2_WEIGHT_LEVEL_FIT,
+        V2_WEIGHT_NO_REPEATS,
+        V2_WEIGHT_NOT_COPIED,
+    )
+
+    rewards: list[float] = []
+    for prompt_item, completion_item in zip(prompts, completions):
+        try:
+            prompt_str = _extract_content(prompt_item, role_target="user")
+            completion_str = _extract_content(
+                completion_item, role_target="assistant"
+            )
+            result = score_completion(
+                prompt_str, completion_str, reward_version="v2"
+            )
+            if not result.passed_all_hard:
+                rewards.append(0.0)
+            else:
+                lf = result.soft_scores.get("level_fit", 0.0)
+                nc = result.soft_scores.get("not_copied", 0.0)
+                nr = result.soft_scores.get("no_repeats", 0.0)
+                m_len = result.soft_scores.get("length_multiplier", 1.0)
+                style_score = (
+                    V2_WEIGHT_LEVEL_FIT * lf
+                    + V2_WEIGHT_NOT_COPIED * nc
+                    + V2_WEIGHT_NO_REPEATS * nr
+                ) * m_len
+                rewards.append(round(float(style_score), 4))
+        except Exception as exc:
+            logger.warning("Failed to score sample in reward_style_fn: %s", exc)
+            rewards.append(0.0)
+    return rewards
+
 
 
 def verdict_accuracy(text: str, verdict: str | None) -> bool | None:

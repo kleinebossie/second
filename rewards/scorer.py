@@ -15,10 +15,13 @@ import chess
 from .checks import (
     CheckResult,
     check_beginner_jargon,
+    check_coach_voice,
     check_format,
     check_grounded_moves,
     check_legal_moves,
+    check_opening_claims,
     check_piece_on_square,
+    check_relational_claims,
     check_verdict_tone,
     is_bad_verdict,
     strip_san_suffix,
@@ -57,13 +60,36 @@ CHESS_JARGON_WORDS: Final[list[str]] = [
     "tabiya",
 ]
 
-# Soft score weights summing to 1.0
+# Soft score weights summing to 1.0 (v1 additive)
 WEIGHT_KEY_POINT: Final[float] = 0.35
 WEIGHT_BETTER_MOVE: Final[float] = 0.15
 WEIGHT_LENGTH: Final[float] = 0.15
 WEIGHT_LEVEL_FIT: Final[float] = 0.15
 WEIGHT_NOT_COPIED: Final[float] = 0.10
 WEIGHT_NO_REPEATS: Final[float] = 0.10
+
+# Soft score weights for Reward v2 content quality (summing to 1.0)
+V2_WEIGHT_KEY_POINT: Final[float] = 0.42
+V2_WEIGHT_BETTER_MOVE: Final[float] = 0.23
+V2_WEIGHT_LEVEL_FIT: Final[float] = 0.15
+V2_WEIGHT_NOT_COPIED: Final[float] = 0.10
+V2_WEIGHT_NO_REPEATS: Final[float] = 0.10
+
+# Partition of hard checks for Reward v2 graded penalties
+FATAL_HALLUCINATION_CHECKS: Final[frozenset[str]] = frozenset({
+    "legal_moves",
+    "grounded_moves",
+    "piece_on_square",
+    "relational_claims",
+    "opening_claims",
+})
+
+STYLE_FORMAT_CHECKS: Final[frozenset[str]] = frozenset({
+    "verdict_tone",
+    "coach_voice",
+    "beginner_jargon",
+    "format",
+})
 
 
 @dataclass(frozen=True)
@@ -277,7 +303,7 @@ def _match_fact(
     Do not count piece names alone as content words.
     """
     fact_stripped = fact.strip()
-    if fact_stripped.startswith(("Phase:", "Material:")):
+    if fact_stripped.startswith(("Phase:", "Material:")) or "in material" in fact_stripped.lower():
         return False
 
     # Check square anchor
@@ -395,7 +421,15 @@ def score_key_point(
     if not facts:
         return 1.0
 
-    if matched_facts >= 2:
+    non_generic = [
+        f for f in facts
+        if not f.strip().startswith(("Phase:", "Material:"))
+        and "in material" not in f.lower()
+    ]
+    if not non_generic:
+        return 1.0
+
+    if matched_facts >= 2 or (len(non_generic) == 1 and matched_facts == 1):
         return 1.0
     if matched_facts == 1:
         return 0.7
@@ -621,6 +655,93 @@ def score_no_repeats(text: str) -> float:
     return max(0.0, 1.0 - total_penalty)
 
 
+def compute_length_multiplier(text: str, detail: str) -> float:
+    """Compute smooth target length multiplier M_len(w) in range 0.2 to 1.0.
+
+    For short detail, return 1.0 when 35 <= w <= 75.
+    Ramp linearly from 0.2 at w <= 15 to 1.0 at w = 35.
+    Ramp linearly from 1.0 at w = 75 to 0.3 at w >= 110.
+    For long detail, return 1.0 when 90 <= w <= 180.
+    Ramp linearly from 0.2 at w <= 40 to 1.0 at w = 90.
+    Ramp linearly from 1.0 at w = 180 to 0.3 at w >= 240.
+    Penalize move-list spam by returning 0.2.
+    """
+    words = text.split()
+    count = len(words)
+    if count == 0:
+        return 0.2
+
+    moves_set = set(parse_moves(text))
+    move_tokens = sum(1 for w in words if clean_move_token(w) in moves_set)
+    if (move_tokens / count) > 0.5:
+        return 0.2
+
+    if detail.lower() == "long":
+        if 90 <= count <= 180:
+            return 1.0
+        if count < 90:
+            if count <= 40:
+                return 0.2
+            return round(0.2 + 0.8 * ((count - 40.0) / 50.0), 4)
+        if count >= 240:
+            return 0.3
+        return round(1.0 - 0.7 * ((count - 180.0) / 60.0), 4)
+
+    # Short detail mode
+    if 35 <= count <= 75:
+        return 1.0
+    if count < 35:
+        if count <= 15:
+            return 0.2
+        return round(0.2 + 0.8 * ((count - 15.0) / 20.0), 4)
+    if count >= 110:
+        return 0.3
+    return round(1.0 - 0.7 * ((count - 75.0) / 35.0), 4)
+
+
+def compute_graded_hard_penalty(hard_results: dict[str, CheckResult]) -> float:
+    """Compute graded negative reward when one or more hard checks fail in v2.
+
+    Each failed fatal hallucination check incurs -0.50.
+    One failed style or format check incurs -0.35.
+    Two or more failed style or format checks incur -0.70.
+    Cap total negative penalty at -1.00.
+    """
+    failed_names = {k for k, v in hard_results.items() if not v.passed}
+    if not failed_names:
+        return 0.0
+
+    fatal_count = len(failed_names.intersection(FATAL_HALLUCINATION_CHECKS))
+    style_count = len(failed_names.intersection(STYLE_FORMAT_CHECKS))
+
+    fatal_penalty = -0.50 * fatal_count
+    if style_count == 0:
+        style_penalty = 0.0
+    elif style_count == 1:
+        style_penalty = -0.35
+    else:
+        style_penalty = -0.70
+
+    total_penalty = fatal_penalty + style_penalty
+    return round(max(-1.0, total_penalty), 4)
+
+
+def _has_concrete_chess_reference(text: str, facts: list[str] | None = None) -> bool:
+    """Return true when text references a concrete move, piece+square, square, or motif."""
+    if parse_moves(text) or parse_piece_square_pairs(text) or parse_squares(text):
+        return True
+    text_lower = text.lower()
+    motif_words = ("fork", "forks", "pin", "pins", "pinned", "skewer", "skewers", "checkmate", "mate", "discovered")
+    if any(m in text_lower for m in motif_words):
+        return True
+    if facts:
+        text_words = set(_tokenize_words(text))
+        for f in facts:
+            if _match_fact(f, text, text_lower, text_words, set(), set(), set()):
+                return True
+    return False
+
+
 def compute_reward(
     text: str,
     fen: str,
@@ -631,12 +752,13 @@ def compute_reward(
     best_move_san: str = "",
     facts: list[str] | None = None,
     prompt_text: str = "",
+    reward_version: str = "v1",
 ) -> RewardResult:
     """Compute the total scalar reward and component diagnostics.
 
     Evaluate all hard rule checks first.
-    If any hard check fails, assign scalar reward of -1.0.
-    If all hard checks pass, compute weighted sum of soft scores.
+    When reward_version is v1, assign -1.0 on any hard check failure and use additive weights.
+    When reward_version is v2, apply graded hard penalties and multiplicative length scaling.
     """
     resolved_best_san = best_move_san or _extract_prompt_field(prompt_text, "Best move:")
 
@@ -689,6 +811,16 @@ def compute_reward(
         ),
     }
 
+    if reward_version == "v2":
+        hard_results["coach_voice"] = check_coach_voice(text=text)
+        hard_results["opening_claims"] = check_opening_claims(text=text, facts=facts)
+        hard_results["relational_claims"] = check_relational_claims(
+            text=text,
+            fen=fen,
+            move_uci=move_uci,
+            facts=facts,
+        )
+
     passed_all_hard = all(res.passed for res in hard_results.values())
 
     # 2. Run soft scores
@@ -719,18 +851,40 @@ def compute_reward(
         "no_repeats": score_no_repeats(text=text),
     }
 
-    if not passed_all_hard:
-        final_reward = -1.0
+    if reward_version == "v2":
+        length_mult = compute_length_multiplier(text=text, detail=detail)
+        soft_results["length_multiplier"] = length_mult
+        if not passed_all_hard:
+            final_reward = compute_graded_hard_penalty(hard_results)
+        else:
+            r_content = (
+                V2_WEIGHT_KEY_POINT * soft_results["key_point"]
+                + V2_WEIGHT_BETTER_MOVE * soft_results["better_move"]
+                + V2_WEIGHT_LEVEL_FIT * soft_results["level_fit"]
+                + V2_WEIGHT_NOT_COPIED * soft_results["not_copied"]
+                + V2_WEIGHT_NO_REPEATS * soft_results["no_repeats"]
+            )
+            final_reward = r_content * length_mult
+            # Substantiation floor: cap vague responses with zero concrete references at 0.15
+            if (
+                soft_results["key_point"] == 0.0
+                and soft_results["better_move"] == 0.0
+            ) or not _has_concrete_chess_reference(text=text, facts=facts):
+                final_reward = min(0.15, final_reward)
+            final_reward = round(max(0.0, min(1.0, final_reward)), 4)
     else:
-        final_reward = (
-            WEIGHT_KEY_POINT * soft_results["key_point"]
-            + WEIGHT_BETTER_MOVE * soft_results["better_move"]
-            + WEIGHT_LENGTH * soft_results["length"]
-            + WEIGHT_LEVEL_FIT * soft_results["level_fit"]
-            + WEIGHT_NOT_COPIED * soft_results["not_copied"]
-            + WEIGHT_NO_REPEATS * soft_results["no_repeats"]
-        )
-        final_reward = round(max(0.0, min(1.0, final_reward)), 4)
+        if not passed_all_hard:
+            final_reward = -1.0
+        else:
+            final_reward = (
+                WEIGHT_KEY_POINT * soft_results["key_point"]
+                + WEIGHT_BETTER_MOVE * soft_results["better_move"]
+                + WEIGHT_LENGTH * soft_results["length"]
+                + WEIGHT_LEVEL_FIT * soft_results["level_fit"]
+                + WEIGHT_NOT_COPIED * soft_results["not_copied"]
+                + WEIGHT_NO_REPEATS * soft_results["no_repeats"]
+            )
+            final_reward = round(max(0.0, min(1.0, final_reward)), 4)
 
     return RewardResult(
         reward=final_reward,
@@ -738,3 +892,4 @@ def compute_reward(
         hard_checks=hard_results,
         soft_scores=soft_results,
     )
+

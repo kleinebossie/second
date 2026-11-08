@@ -11,12 +11,20 @@ from collections import Counter
 from dataclasses import dataclass, field
 import json
 import logging
+import math
 from pathlib import Path
 import random
 from typing import Any
 
 from eval.metrics import clean_completion_text, count_words
-from rewards.api import _extract_content, _extract_user_message, score_completion
+from rewards.api import (
+    _extract_content,
+    _extract_user_message,
+    reward_grounding_fn,
+    reward_pedagogy_fn,
+    reward_style_fn,
+    score_completion,
+)
 from training.sft_data import (
     ALLOWED_BASE_MODELS,
     _read_yaml_file,
@@ -24,6 +32,13 @@ from training.sft_data import (
 )
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+ALLOWED_LOSS_TYPES: set[str] = {"grpo", "bnpo", "dr_grpo", "dapo"}
+ALLOWED_REWARD_VERSIONS: set[str] = {"v1", "v2"}
+ALLOWED_MULTI_OBJECTIVE_AGGREGATIONS: set[str] = {
+    "sum_then_normalize",
+    "normalize_then_sum",
+}
 
 
 @dataclass
@@ -56,6 +71,11 @@ class GRPOConfigParams:
     gradient_accumulation_steps: int
     gpu: str
     checkpoint_dir: str
+    loss_type: str = "dapo"
+    reward_version: str = "v1"
+    multi_objective_aggregation: str = "sum_then_normalize"
+    use_cmdp_primal_dual: bool = False
+    devset_path: str = "eval/devset-1.0.jsonl"
     raw_config: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -99,6 +119,12 @@ def load_grpo_config(
     save_steps = grpo.get("save_steps")
     per_device_train_batch_size = grpo.get("per_device_train_batch_size")
     gradient_accumulation_steps = grpo.get("gradient_accumulation_steps")
+    loss_type = str(grpo.get("loss_type", "dapo"))
+    reward_version = str(grpo.get("reward_version", "v1"))
+    multi_objective_aggregation = str(
+        grpo.get("multi_objective_aggregation", "sum_then_normalize")
+    )
+    use_cmdp_primal_dual = bool(grpo.get("use_cmdp_primal_dual", False))
 
     if base_model not in ALLOWED_BASE_MODELS:
         raise ValueError(
@@ -128,13 +154,26 @@ def load_grpo_config(
         raise ValueError(
             f"Invalid beta: expected 0.0 <= beta <= 0.5, got {beta}"
         )
-    if not (isinstance(max_steps, int) and 300 <= max_steps <= 600):
+    min_allowed_steps = 150 if reward_version == "v2" else 300
+    if not (isinstance(max_steps, int) and min_allowed_steps <= max_steps <= 600):
         raise ValueError(
-            f"Invalid max_steps: expected 300 <= max_steps <= 600, got {max_steps}"
+            f"Invalid max_steps: expected {min_allowed_steps} <= max_steps <= 600, got {max_steps}"
         )
     if not (isinstance(save_steps, int) and 25 <= save_steps <= 50):
         raise ValueError(
             f"Invalid save_steps: expected 25 <= save_steps <= 50, got {save_steps}"
+        )
+    if loss_type not in ALLOWED_LOSS_TYPES:
+        raise ValueError(
+            f"Invalid loss_type: expected one of {sorted(ALLOWED_LOSS_TYPES)}, got '{loss_type}'"
+        )
+    if reward_version not in ALLOWED_REWARD_VERSIONS:
+        raise ValueError(
+            f"Invalid reward_version: expected one of {sorted(ALLOWED_REWARD_VERSIONS)}, got '{reward_version}'"
+        )
+    if multi_objective_aggregation not in ALLOWED_MULTI_OBJECTIVE_AGGREGATIONS:
+        raise ValueError(
+            f"Invalid multi_objective_aggregation: expected one of {sorted(ALLOWED_MULTI_OBJECTIVE_AGGREGATIONS)}, got '{multi_objective_aggregation}'"
         )
 
     if not isinstance(per_device_train_batch_size, int) or per_device_train_batch_size <= 0:
@@ -180,6 +219,11 @@ def load_grpo_config(
         gradient_accumulation_steps=int(gradient_accumulation_steps),
         gpu=str(grpo.get("gpu", "L4")),
         checkpoint_dir=str(grpo.get("checkpoint_dir", "")),
+        loss_type=loss_type,
+        reward_version=reward_version,
+        multi_objective_aggregation=multi_objective_aggregation,
+        use_cmdp_primal_dual=use_cmdp_primal_dual,
+        devset_path=str(grpo.get("devset_path", "eval/devset-1.0.jsonl")),
         raw_config=raw,
     )
 
@@ -245,21 +289,41 @@ def load_rl_prompt_records(
     return records
 
 
-def detect_anomalies(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _compute_std(values: list[float]) -> float:
+    """Compute population standard deviation for a list of numbers."""
+    n = len(values)
+    if n <= 1:
+        return 0.0
+    mean_val = sum(values) / n
+    variance = sum((v - mean_val) ** 2 for v in values) / n
+    return math.sqrt(variance)
+
+
+def detect_anomalies(
+    records: list[dict[str, Any]],
+    group_size: int = 8,
+) -> dict[str, Any]:
     """Detect reward hacking and training collapse in scored completions.
 
     Flag length collapse when the average word count is below 15 words.
+    Flag low group length diversity when group_length_std is below 4.0 words.
     Flag robotic text when the top four-word prefix exceeds 40 percent.
     Flag high hard-fail when the hard-fail rate exceeds 50 percent.
+    Track zero_var_group_pct, first_person_pct, and motif_mention_pct.
     Return a dictionary with anomaly flags and metric values.
     """
     total = len(records)
     if total == 0:
         return {
             "length_collapse": False,
+            "low_length_diversity": False,
             "robotic_text": False,
             "high_hard_fail": False,
             "avg_word_count": 0.0,
+            "group_length_std": 0.0,
+            "zero_var_group_pct": 0.0,
+            "first_person_pct": 0.0,
+            "motif_mention_pct": 0.0,
             "hard_fail_rate": 0.0,
             "mean_reward": 0.0,
             "top_opening_prefix": "",
@@ -274,6 +338,44 @@ def detect_anomalies(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     total_reward = sum(float(r.get("reward", 0.0)) for r in records)
     mean_reward = round(total_reward / total, 4)
+
+    first_person_count = sum(
+        1 for r in records if bool(r.get("has_first_person", False))
+    )
+    first_person_pct = round(100.0 * first_person_count / total, 2)
+
+    motif_count = sum(
+        1 for r in records if bool(r.get("has_motif_or_best_move", False))
+    )
+    motif_mention_pct = round(100.0 * motif_count / total, 2)
+
+    # Compute within-group standard deviations across groups of size G
+    eff_group = max(1, group_size)
+    group_len_stds: list[float] = []
+    zero_var_groups = 0
+    num_groups = 0
+
+    for i in range(0, total, eff_group):
+        grp = records[i : i + eff_group]
+        if len(grp) >= 2:
+            num_groups += 1
+            grp_words = [float(r.get("word_count", 0)) for r in grp]
+            grp_rewards = [float(r.get("reward", 0.0)) for r in grp]
+            group_len_stds.append(_compute_std(grp_words))
+            if _compute_std(grp_rewards) < 1e-4:
+                zero_var_groups += 1
+
+    group_length_std = (
+        round(sum(group_len_stds) / len(group_len_stds), 2)
+        if group_len_stds
+        else 0.0
+    )
+    zero_var_group_pct = (
+        round(100.0 * zero_var_groups / num_groups, 2)
+        if num_groups > 0
+        else 0.0
+    )
+    low_length_diversity = bool(num_groups > 0 and group_length_std < 4.0)
 
     non_empty = [
         r for r in records
@@ -305,9 +407,14 @@ def detect_anomalies(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "length_collapse": length_collapse,
+        "low_length_diversity": low_length_diversity,
         "robotic_text": robotic_text,
         "high_hard_fail": high_hard_fail,
         "avg_word_count": avg_word_count,
+        "group_length_std": group_length_std,
+        "zero_var_group_pct": zero_var_group_pct,
+        "first_person_pct": first_person_pct,
+        "motif_mention_pct": motif_mention_pct,
         "hard_fail_rate": hard_fail_rate,
         "mean_reward": mean_reward,
         "top_opening_prefix": top_opening_prefix,
@@ -332,28 +439,64 @@ def sample_outputs_for_inspection(
     return rng.sample(records, count)
 
 
+def build_multi_objective_reward_funcs(
+    monitor: MonitoredGRPOReward | None = None,
+) -> list[Any]:
+    """Return the three split reward callables for MO-GRPO / GDPO training.
+
+    When a MonitoredGRPOReward instance is provided, wrap grounding with telemetry.
+    Return [grounding_fn, reward_pedagogy_fn, reward_style_fn].
+    """
+    if monitor is None:
+        return [reward_grounding_fn, reward_pedagogy_fn, reward_style_fn]
+
+    def _monitored_grounding_fn(
+        prompts: list[Any],
+        completions: list[Any],
+        **kwargs: Any,
+    ) -> list[float]:
+        # Record telemetry via monitor while returning only grounding stream
+        monitor(prompts, completions, **kwargs)
+        return reward_grounding_fn(prompts, completions, **kwargs)
+
+    _monitored_grounding_fn.__name__ = "reward_grounding_fn"
+    return [_monitored_grounding_fn, reward_pedagogy_fn, reward_style_fn]
+
+
 class MonitoredGRPOReward:
     """Reward function wrapper with diagnostics and anti-hacking monitoring.
 
     Score completions with rule checks for reinforcement learning.
-    Log mean reward and failure rates across training steps.
+    Log mean reward, collapse metrics, and failure rates across training steps.
+    Support Reward v1 and Reward v2, plus optional CMDP primal-dual multiplier.
     Save sample completions for manual review.
-    Detect text length collapse and repetitive patterns.
     """
 
     __name__: str = "grpo_rule_reward"
 
     def __init__(
         self,
-        log_interval_batches: int = 50,
+        log_interval_batches: int = 25,
         sample_size: int = 20,
         seed: int = 42,
+        reward_version: str = "v1",
+        group_size: int = 8,
+        use_cmdp_primal_dual: bool = False,
+        lambda_rule_init: float = 1.0,
+        eta_lambda: float = 0.5,
+        target_violation_rate: float = 0.04,
     ) -> None:
-        """Initialize the reward monitor with logging intervals and random seeds."""
+        """Initialize the reward monitor with logging intervals and reward version."""
         self.__name__: str = "grpo_rule_reward"
         self.log_interval_batches = log_interval_batches
         self.sample_size = sample_size
         self.seed = seed
+        self.reward_version = reward_version
+        self.group_size = group_size
+        self.use_cmdp_primal_dual = use_cmdp_primal_dual
+        self.lambda_rule: float = lambda_rule_init
+        self.eta_lambda: float = eta_lambda
+        self.target_violation_rate: float = target_violation_rate
         self.call_count: int = 0
         self.current_window: list[dict[str, Any]] = []
         self.step_summaries: list[dict[str, Any]] = []
@@ -364,10 +507,14 @@ class MonitoredGRPOReward:
 
         Return anomaly flags, averages, and sample count for the window.
         """
-        anomalies = detect_anomalies(self.current_window)
+        anomalies = detect_anomalies(
+            self.current_window,
+            group_size=self.group_size,
+        )
         return {
             "step": self.call_count,
             "sample_count": len(self.current_window),
+            "lambda_rule": round(self.lambda_rule, 4),
             **anomalies,
         }
 
@@ -381,11 +528,17 @@ class MonitoredGRPOReward:
 
         Extract user prompt text and assistant completion text.
         Calculate rule-based reward and check failures for each pair.
-        Record word counts and opening prefixes.
+        Record word counts, opening prefixes, first-person usage, and motif mentions.
+        If use_cmdp_primal_dual is enabled, scale negative penalties by lambda_rule
+        and update lambda_rule toward target_violation_rate (0.04).
         If call count reaches the log interval, save summaries and samples.
         Return a list of scalar rewards.
         """
+        from rewards.checks import check_coach_voice
+
         batch_rewards: list[float] = []
+        batch_violations = 0
+        motif_keywords = ("fork", "pin", "skewer", "checkmate", "mate", "discovered")
 
         for prompt_item, completion_item in zip(prompts, completions):
             prompt_str = _extract_content(prompt_item, role_target="user")
@@ -398,19 +551,35 @@ class MonitoredGRPOReward:
             words = [w.strip() for w in cleaned_text.split() if w.strip()]
             word_count = len(words)
             opening_prefix = " ".join(words[:4]).lower() if words else ""
+            has_first_person = not check_coach_voice(cleaned_text).passed
+            text_lower = cleaned_text.lower()
 
             try:
-                result = score_completion(prompt_str, completion_str)
+                result = score_completion(
+                    prompt_str,
+                    completion_str,
+                    reward_version=self.reward_version,
+                )
                 reward_val = float(result.reward)
                 passed_all_hard = bool(result.passed_all_hard)
                 failed_checks = [
                     k for k, v in result.hard_checks.items() if not v.passed
                 ]
+                has_motif_or_best = (
+                    result.soft_scores.get("better_move", 0.0) >= 1.0
+                    or any(m in text_lower for m in motif_keywords)
+                )
             except Exception as exc:
                 logger.warning("Scoring failed in MonitoredGRPOReward: %s", exc)
                 reward_val = -1.0
                 passed_all_hard = False
                 failed_checks = ["scoring_exception"]
+                has_motif_or_best = False
+
+            if not passed_all_hard:
+                batch_violations += 1
+                if self.use_cmdp_primal_dual and reward_val < 0.0:
+                    reward_val = round(max(-3.0, reward_val * self.lambda_rule), 4)
 
             sample_record = {
                 "prompt": user_msg,
@@ -420,10 +589,19 @@ class MonitoredGRPOReward:
                 "failed_checks": failed_checks,
                 "word_count": word_count,
                 "opening_prefix": opening_prefix,
+                "has_first_person": has_first_person,
+                "has_motif_or_best_move": has_motif_or_best,
             }
 
             self.current_window.append(sample_record)
             batch_rewards.append(reward_val)
+
+        if self.use_cmdp_primal_dual and len(prompts) > 0:
+            batch_violation_rate = batch_violations / len(prompts)
+            updated_lambda = self.lambda_rule + self.eta_lambda * (
+                batch_violation_rate - self.target_violation_rate
+            )
+            self.lambda_rule = max(0.2, min(3.0, updated_lambda))
 
         self.call_count += 1
 
@@ -442,4 +620,5 @@ class MonitoredGRPOReward:
 
 
 MonitoredGRPOReward.__name__ = "grpo_rule_reward"
+
 

@@ -1,0 +1,36 @@
+# Recipe configuration for Second-1.0-2B Stage T4 GRPO v2 (RL-B2: DAPO + Reward v2)
+model_name: "Second-1.0-2B-GRPO-v2-B2"
+version: "2.0"
+size: "2B"
+base_model: "Qwen/Qwen3.5-2B"
+
+mode:
+  text_only: true
+  enable_thinking: false
+
+grpo:
+  sft_adapter_dir: "/content/drive/MyDrive/second/checkpoints/sft_v2_a1/final_adapter"
+  rl_prompts_path: "data/processed/rl_prompts_v2.jsonl"
+  val_data_path: "data/processed/sft_val.jsonl"
+  devset_path: "eval/devset-1.0.jsonl"
+  testset_path: "eval/testset-1.0.jsonl"
+  loss_type: "dapo"
+  reward_version: "v2"
+  multi_objective_aggregation: "sum_then_normalize"
+  use_cmdp_primal_dual: false
+  num_generations: 8
+  max_completion_length: 300
+  max_prompt_length: 512
+  temperature: 0.9
+  learning_rate: 0.000005
+  beta: 0.02
+  max_steps: 300
+  warmup_steps: 25
+  save_steps: 25
+  eval_steps: 25
+  logging_steps: 5
+  save_total_limit: 4
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 8
+  gpu: "L4"
+  checkpoint_dir: "/content/drive/MyDrive/second/checkpoints/grpo_v2_b2"

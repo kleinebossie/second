@@ -57,3 +57,19 @@ grpo:
   gradient_accumulation_steps: 1
   gpu: "L4"
   checkpoint_dir: "/content/drive/MyDrive/second/checkpoints/grpo-1.0-2b"
+
+# Frozen Iteration 2 Release Recipe (Stage T3 SFT-A1 + Stage T4 RL-B2)
+v2_release:
+  experiment_sft: "SFT-A1"
+  experiment_grpo: "RL-B2"
+  sft_config: "training/configs/sft_v2_a1_lora32.yaml"
+  grpo_config: "training/configs/grpo_v2_b2_dapo.yaml"
+  sft_train_data_path: "data/processed/sft_v2_train.jsonl"
+  rl_prompts_path: "data/processed/rl_prompts_v2.jsonl"
+  reward_version: "v2"
+  loss_type: "dapo"
+  lora_r: 32
+  lora_alpha: 64
+  thinking_mode: "off"
+  final_adapter_dir: "/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter"
+
