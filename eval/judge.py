@@ -15,6 +15,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import random
 import re
 import threading
 import time
@@ -22,9 +23,67 @@ from typing import Any
 
 import requests
 
+from eval.lc_winrate import compute_lc_winrate
 from eval.metrics import clean_completion_text, ensure_prompt_text
 
 LOGGER = logging.getLogger(__name__)
+
+ANTI_VERBOSITY_RULES = (
+    "Anti-verbosity and contract enforcement rules:\n"
+    "1. Word count is not a proxy for quality. A concise 45-word explanation that accurately explains "
+    "the key threat and better move must beat a 250-word rambling essay.\n"
+    "2. Target format is plain text prose (2-4 sentences for short, 1-2 short paragraphs for long). "
+    "Penalize markdown headings, bullet lists, raw engine centipawn numbers given to beginners, "
+    "or first-person diary excuses ('I thought...', 'My idea was...').\n"
+    "3. Any hallucinated illegal move, wrong piece location, wrong opening name, or false tactical claim "
+    "is a severe defect that caps Correctness at 2."
+)
+
+RUBRIC_ANCHORS = {
+    "correctness": (
+        "correctness (1-5): Moves, squares, and facts must match the chess position.\n"
+        "   - 1: Severe hallucinations (illegal moves, non-existent pieces, fabricated squares).\n"
+        "   - 2: Notable factual errors (e.g. false protection claim, wrong opening). Caps at 2 for any hallucination.\n"
+        "   - 3: Mostly correct facts, but minor inaccuracies in coordination or timing.\n"
+        "   - 4: Accurate moves, squares, and piece relationships; zero false assertions.\n"
+        "   - 5: Perfectly accurate chess facts, fully verified against board and engine lines."
+    ),
+    "clarity": (
+        "clarity (1-5): The text must be simple, direct, and easy to understand.\n"
+        "   - 1: Incomprehensible fragments or unformatted gibberish.\n"
+        "   - 2: Tangled sentences, confusing pronouns, or difficult to follow logic.\n"
+        "   - 3: Understandable but awkward phrasing or repetitive filler.\n"
+        "   - 4: Clear, direct, and well-structured plain text prose.\n"
+        "   - 5: Exceptionally lucid, natural, concise coaching voice without clutter."
+    ),
+    "usefulness": (
+        "usefulness (1-5): The explanation must teach the main tactical or positional idea.\n"
+        "   - 1: Generic filler or diary excuse that could apply to any position without coaching value.\n"
+        "   - 2: Superficial facts without explaining the underlying threat, tactic, or reason.\n"
+        "   - 3: Names the played move and verdict, but omits why it fails/works or the better move.\n"
+        "   - 4: Explains the concrete threat and consequence, and suggests the better move or plan.\n"
+        "   - 5: Deeply instructive: illuminates key tactical motif/threat, explains alternatives, and teaches concept."
+    ),
+    "level_fit": (
+        "level_fit (1-5): Vocabulary and sentence length must fit player level: {level}.\n"
+        "   - 1: Inappropriate for level (e.g. raw centipawns or engine jargon given to a beginner).\n"
+        "   - 2: Poor vocabulary calibration (overly complex for beginners or trivialized for club players).\n"
+        "   - 3: Acceptable vocabulary, but uneven tone or slightly mismatched complexity.\n"
+        "   - 4: Well-calibrated concepts and vocabulary suitable for the target audience.\n"
+        "   - 5: Tailored communication: simple for beginners, incisive for club players."
+    ),
+}
+
+
+def get_permuted_rubric_criteria(item_id: str, level: str) -> str:
+    """Return permuted rubric criteria descriptions using a deterministic seed from item_id."""
+    dims = ["correctness", "clarity", "usefulness", "level_fit"]
+    if item_id:
+        seed = int(hashlib.sha256(item_id.encode("utf-8")).hexdigest()[:8], 16)
+        rng = random.Random(seed)
+        rng.shuffle(dims)
+    lines = [f"{i+1}. {RUBRIC_ANCHORS[d].format(level=level)}" for i, d in enumerate(dims)]
+    return "\n\n".join(lines)
 
 DEFAULT_JUDGE_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_CACHE_PATH = Path("eval/results/judge_cache.jsonl")
@@ -336,6 +395,7 @@ class PairwiseSummary:
     candidate_win_rate: float
     candidate_win_tie_rate: float
     swap_agreement_rate: float
+    lc_win_rate: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert pairwise summary to dictionary."""
@@ -368,14 +428,13 @@ class GeminiJudge:
         Dimensions are correctness, clarity, usefulness, and level fit.
         Return a RubricScore instance.
         """
+        criteria_text = get_permuted_rubric_criteria(item_id, level)
         judge_prompt = (
             "You are an expert chess coach.\n"
             f"Score a chess explanation for a player at level: {level}.\n\n"
+            f"{ANTI_VERBOSITY_RULES}\n\n"
             "Rate the explanation on four criteria from 1 (very poor) to 5 (excellent):\n"
-            "1. correctness (1-5): Moves, squares, and facts must match the chess position.\n"
-            "2. clarity (1-5): The text must be simple, direct, and easy to understand.\n"
-            "3. usefulness (1-5): The explanation must teach the main tactical or positional idea.\n"
-            f"4. level_fit (1-5): Vocabulary and sentence length must fit player level: {level}.\n\n"
+            f"{criteria_text}\n\n"
             f"Position and facts:\n{prompt_text}\n\n"
             f"Explanation:\n{explanation}\n\n"
             "Respond with a JSON object in this format:\n"
@@ -477,6 +536,7 @@ class GeminiJudge:
         judge_prompt = (
             "You are an expert chess coach.\n"
             f"Compare two chess explanations for a player at level: {level}.\n\n"
+            f"{ANTI_VERBOSITY_RULES}\n\n"
             "Evaluation criteria:\n"
             "1. Correctness: Moves, squares, and facts must match the chess position.\n"
             "2. Clarity: The text must be simple, direct, and easy to understand.\n"
@@ -629,6 +689,18 @@ class GeminiJudge:
         win_tie_rate = round(100.0 * (w + t) / total, 2)
         agree_rate = round(100.0 * agreed / total, 2)
 
+        # Compute Length-Controlled Win Rate
+        lc_pairs: list[dict[str, Any]] = []
+        for pair, comp in zip(pairs, results):
+            cand_text = clean_completion_text(str(pair.get("candidate", "")))
+            opp_text = clean_completion_text(str(pair.get("opponent", "")))
+            lc_pairs.append({
+                "winner": comp.winner,
+                "candidate_words": len(cand_text.split()),
+                "opponent_words": len(opp_text.split()),
+            })
+        lc_res = compute_lc_winrate(lc_pairs)
+
         summary = PairwiseSummary(
             opponent_name=opponent_name,
             total_pairs=total,
@@ -638,6 +710,7 @@ class GeminiJudge:
             candidate_win_rate=win_rate,
             candidate_win_tie_rate=win_tie_rate,
             swap_agreement_rate=agree_rate,
+            lc_win_rate=lc_res.lc_win_rate,
         )
         return summary, results
 

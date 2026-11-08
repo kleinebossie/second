@@ -28,6 +28,7 @@ from rewards.scorer import (
     WEIGHT_NO_REPEATS,
     WEIGHT_NOT_COPIED,
 )
+from eval.concept_tags import CONCEPT_TIERS, classify_concept_tier
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +39,9 @@ HARD_CHECK_NAMES: tuple[str, ...] = (
     "verdict_tone",
     "format",
     "beginner_jargon",
+    "coach_voice",
+    "opening_claims",
+    "relational_claims",
 )
 
 SOFT_SCORE_NAMES: tuple[str, ...] = (
@@ -82,6 +86,7 @@ class ItemMetric:
     verdict_covered: bool
     verdict_tone_passed: bool
     completion: str
+    concept_tier: str | None = None
 
     def composite_soft_score(self) -> float:
         """Compute weighted sum of soft scores using canonical reward weights."""
@@ -287,6 +292,13 @@ def evaluate_item(item: dict[str, Any], completion: str | None = None) -> ItemMe
         verdict_accurate = acc_result
         verdict_covered = acc_result is not None
 
+    concept_tier = item.get("concept_tier")
+    if not concept_tier:
+        try:
+            concept_tier = classify_concept_tier(item)
+        except Exception:
+            concept_tier = "tier_4_positional"
+
     return ItemMetric(
         id=item_id,
         task=task,
@@ -304,6 +316,7 @@ def evaluate_item(item: dict[str, Any], completion: str | None = None) -> ItemMe
         verdict_covered=verdict_covered,
         verdict_tone_passed=verdict_tone_passed,
         completion=raw_completion,
+        concept_tier=concept_tier,
     )
 
 
@@ -462,6 +475,11 @@ def aggregate_metrics(item_metrics: list[ItemMetric]) -> AggregateMetrics:
         "detail": {
             "short": _compute_slice_stats(short_items),
             "long": _compute_slice_stats(long_items),
+        },
+        "concept_tier": {
+            tier: _compute_slice_stats([it for it in item_metrics if it.concept_tier == tier])
+            for tier in CONCEPT_TIERS
+            if any(it.concept_tier == tier for it in item_metrics)
         },
     }
 

@@ -189,8 +189,8 @@ def generate_markdown_report(
             "The judge evaluates each pair twice with swapped order.",
             "If picks disagree across orders, the judge records a tie.",
             "",
-            "| Opponent Baseline | Total Pairs | Wins | Losses | Ties | Win Rate (%) | Win+Tie (%) | Swap Agreement (%) |",
-            "|---|---|---|---|---|---|---|---|",
+            "| Opponent Baseline | Total Pairs | Wins | Losses | Ties | Win Rate (%) | LC-WR (%) | Win+Tie (%) | Swap Agreement (%) |",
+            "|---|---|---|---|---|---|---|---|---|",
         ])
 
         pairwise_sums = judge_results.get("pairwise", {}).get("summaries", {})
@@ -201,13 +201,14 @@ def generate_markdown_report(
                 l = s.get("opponent_wins", 0)
                 t = s.get("ties", 0)
                 wr = s.get("candidate_win_rate", 0.0)
+                lc_wr = s.get("lc_win_rate", 0.0)
                 wtr = s.get("candidate_win_tie_rate", 0.0)
                 agr = s.get("swap_agreement_rate", 0.0)
                 lines.append(
-                    f"| `{opp_name}` | {tp} | {w} | {l} | {t} | {wr:.1f}% | {wtr:.1f}% | {agr:.1f}% |"
+                    f"| `{opp_name}` | {tp} | {w} | {l} | {t} | {wr:.1f}% | {lc_wr:.1f}% | {wtr:.1f}% | {agr:.1f}% |"
                 )
         else:
-            lines.append("| *None* | 0 | 0 | 0 | 0 | 0.0% | 0.0% | 0.0% |")
+            lines.append("| *None* | 0 | 0 | 0 | 0 | 0.0% | 0.0% | 0.0% | 0.0% |")
             lines.append("")
             lines.append("*Note: No opponent baseline files were available for pairwise comparisons.*")
     else:
