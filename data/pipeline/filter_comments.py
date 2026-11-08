@@ -12,7 +12,15 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 import chess
-from langdetect import DetectorFactory, detect
+
+try:
+    from langdetect import DetectorFactory, detect
+
+    # Ensure deterministic language detection
+    DetectorFactory.seed = 0
+except ImportError:
+    DetectorFactory = None  # type: ignore
+    detect = None  # type: ignore
 
 from rewards.checks import (
     check_legal_moves,
@@ -33,9 +41,6 @@ except ImportError:
         has_too_many_unknown_tokens,
         remove_reader_questions,
     )
-
-# Ensure deterministic language detection
-DetectorFactory.seed = 0
 
 # Regular expression to remove PGN engine and board tags
 PGN_TAG_RE: Final[re.Pattern[str]] = re.compile(r"\[%[a-zA-Z]+[^\]]*\]")
@@ -424,6 +429,10 @@ def filter_comment(
         return False, "cleaned_empty_or_short", cleaned
 
     # 2. Check English language
+    if detect is None:
+        raise ImportError(
+            "The langdetect module is missing. Install langdetect to filter comments."
+        )
     try:
         detected_lang = detect(cleaned)
         if detected_lang != "en":
@@ -529,6 +538,10 @@ def pre_filter_comment(
         return False, "cleaned_empty_or_short", cleaned
 
     # 2. Check English language
+    if detect is None:
+        raise ImportError(
+            "The langdetect module is missing. Install langdetect to filter comments."
+        )
     try:
         detected_lang = detect(cleaned)
         if detected_lang != "en":

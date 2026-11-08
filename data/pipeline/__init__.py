@@ -29,15 +29,25 @@ from .eval_pool import (
     generate_eval_pool,
     save_eval_pool,
 )
-from .filter_comments import (
-    FilterStats,
-    assign_detail_and_truncate,
-    clean_comment,
-    compute_shingles,
-    filter_comment,
-    is_near_duplicate,
-    pre_filter_comment,
-)
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from .filter_comments import (
+        FilterStats,
+        assign_detail_and_truncate,
+        clean_comment,
+        compute_shingles,
+        filter_comment,
+        is_near_duplicate,
+        pre_filter_comment,
+    )
+    from .synthesize_teacher import (
+        TEACHER_SYSTEM_PROMPT,
+        build_teacher_messages,
+        extract_think_trace,
+        parse_teacher_completion,
+        split_thinking_record,
+    )
 from .label_levels import (
     label_level,
 )
@@ -60,6 +70,56 @@ from .splits import (
     save_splits,
     split_by_game,
 )
+
+_FILTER_COMMENT_SYMBOLS: Final[set[str]] = {
+    "FilterStats",
+    "assign_detail_and_truncate",
+    "clean_comment",
+    "compute_shingles",
+    "filter_comment",
+    "is_near_duplicate",
+    "pre_filter_comment",
+}
+
+_TEACHER_SYMBOLS: Final[set[str]] = {
+    "TEACHER_SYSTEM_PROMPT",
+    "build_teacher_messages",
+    "extract_think_trace",
+    "parse_teacher_completion",
+    "split_thinking_record",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Import pipeline attributes on demand.
+
+    If name belongs to filter_comments, import and return the attribute.
+    If name belongs to synthesize_teacher, import and return the attribute.
+    If name is unknown, raise an AttributeError.
+    """
+    if name in _FILTER_COMMENT_SYMBOLS:
+        from . import filter_comments
+
+        val = getattr(filter_comments, name)
+        globals()[name] = val
+        return val
+    if name in _TEACHER_SYMBOLS:
+        from . import synthesize_teacher
+
+        val = getattr(synthesize_teacher, name)
+        globals()[name] = val
+        return val
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """Return all public module attribute names."""
+    return sorted(
+        list(globals().keys())
+        + list(_FILTER_COMMENT_SYMBOLS)
+        + list(_TEACHER_SYMBOLS)
+    )
+
 
 __all__ = [
     "StockfishAnalyzer",
@@ -94,4 +154,10 @@ __all__ = [
     "remove_reader_questions",
     "has_too_many_unknown_tokens",
     "count_unknown_tokens",
+    "TEACHER_SYSTEM_PROMPT",
+    "build_teacher_messages",
+    "extract_think_trace",
+    "parse_teacher_completion",
+    "split_thinking_record",
 ]
+

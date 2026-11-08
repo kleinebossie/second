@@ -30,12 +30,6 @@ from .eval_pool import (
     generate_eval_pool,
     save_eval_pool,
 )
-from .filter_comments import (
-    FilterStats,
-    assign_detail_and_truncate,
-    filter_comment,
-    pre_filter_comment,
-)
 from .label_levels import (
     label_level,
 )
@@ -119,6 +113,12 @@ def run_pipeline(
 
     if sft_records:
         LOGGER.info("Pre-filtering SFT records before Stockfish analysis")
+        from .filter_comments import (
+            FilterStats,
+            assign_detail_and_truncate,
+            pre_filter_comment,
+        )
+
         filter_stats = FilterStats()
         pre_seen_fps: set[str] = set()
         pre_seen_shingles: list[set[tuple[str, ...]]] = []
