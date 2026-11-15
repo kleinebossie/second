@@ -503,21 +503,21 @@ flowchart LR
 
 ---
 
-## 12. Phase 10 — Soft-Release Second-1.0-2B (NEXT PHASE)
+## 12. Phase 10 — Soft-Release Second-1.0-2B: COMPLETED (2026-11-15)
 
 Goal: ship `Second-1.0-2B` quietly as a preview release without broad public promotion. Real player ratings will guide the `v1.1` fixes.
 
-1. Final eval report published (`eval/reports/Second-1.0-2B.md`). `Second-1.0-2B` weights are already uploaded to Hugging Face (`joebos/Second-1.0-2B` and `joebos/Second-1.0-2B-GGUF`).
-2. `0.8B` selector disabled in the extension (`extension/sidepanel.html`, `extension/src/sidepanel/main.ts`, `extension/src/runtime/modelRunner.ts`, `extension/store/description.txt`) so `v1.0` users only download the trained `2B` model.
-3. Build a small Hugging Face demo Space: paste a PGN or FEN, pick a move, and read an explanation.
-4. GitHub release `v1.0.0`, without broad public promotion.
-5. Chrome Web Store: pay the \$5 fee once and submit the extension.
-6. Edge Add-ons: submit (free).
-7. Share quietly with trusted testers to collect exported thumbs-up and thumbs-down ratings. **Hold r/chess and Lichess forum announcements until `v1.1` ships.**
+1. [x] Final eval report (`eval/reports/Second-1.0-2B.md`) and `README.md` updated for `Second-1.0-2B` only. Weights published on Hugging Face (`joebos/Second-1.0-2B` and `joebos/Second-1.0-2B-GGUF`).
+2. [x] `0.8B` selector disabled in the extension (`extension/sidepanel.html`, `extension/src/sidepanel/main.ts`, `extension/src/runtime/modelRunner.ts`, `extension/store/description.txt`) so `v1.0` users only download the trained `2B` model.
+3. [x] Deployed static browser demo Space (`joebos/second-chess-demo`, built via `demo_space/static/build.js`) running `Second-1.0-2B` and Stockfish in the browser.
+4. [x] Packaged `extension/release/second-extension-v1.0.0.zip` and published GitHub release `v1.0.0`, without broad public promotion.
+5. [x] Chrome Web Store listing, screenshots, promo tiles, and privacy disclosures completed for submission.
+6. [ ] Edge Add-ons (optional, free): submit `second-extension-v1.0.0.zip` after Chrome Web Store approval.
+7. [ ] Share quietly with trusted testers to collect exported thumbs-up and thumbs-down ratings. **Hold r/chess and Lichess forum announcements until `v1.1` ships.**
 
 ---
 
-## 13. Phase 11 — Second-1.1 Fact Extractor and Verification Upgrades
+## 13. Phase 11 — Second-1.1 Fact Extractor and Verification Upgrades (NEXT PHASE)
 
 **Decision:** skip `Second-1.0-0.8B`, `Second-1.0-4B`, and `Second-1.0-9B`. Do not spend compute training more sizes on the frozen `v1.0` fact format. Focus directly on `v1.1`.
 
