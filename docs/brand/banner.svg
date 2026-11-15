@@ -34,7 +34,7 @@
   <rect x="1" y="1" width="1198" height="318" rx="20" fill="url(#banner-glow)"/>
 
   <!-- Left Brand Column -->
-  <g transform="translate(52, 62) scale(0.92)">
+  <g transform="translate(48, 72) scale(0.92)">
     <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#banner-mark-bg)"/>
     <rect x="4" y="4" width="120" height="120" rx="28" fill="none" stroke="url(#banner-mark-rim)" stroke-width="2"/>
     <path fill="url(#banner-gold)" d="
@@ -49,12 +49,13 @@
     <rect x="85" y="95" width="9.5" height="9.5" rx="3" fill="#34d399"/>
   </g>
 
-  <text x="192" y="118" fill="#ffffff" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="56" font-weight="700" letter-spacing="-1.5">Second</text>
-  <text x="194" y="152" fill="#e5c07b" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="21" font-weight="600">Your local chess second.</text>
-  <text x="194" y="182" fill="#94a3b8" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15">Plain-English move explanations on your device. Built for Lichess study.</text>
+  <text x="186" y="108" fill="#ffffff" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="56" font-weight="700" letter-spacing="-1.5">Second</text>
+  <text x="188" y="140" fill="#e5c07b" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="21" font-weight="600">Your local chess second.</text>
+  <text x="188" y="170" fill="#94a3b8" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14.5">Plain-English move explanations on your device.</text>
+  <text x="188" y="191" fill="#94a3b8" font-family="'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14.5">Built for post-game Lichess study.</text>
 
   <!-- Feature Pills -->
-  <g transform="translate(194, 212)">
+  <g transform="translate(188, 218)">
     <rect x="0" y="0" width="146" height="32" rx="8" fill="#1c1f28" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>
     <rect x="13" y="12" width="8" height="8" rx="2" fill="#34d399"/>
     <text x="29" y="20.5" fill="#e2e8f0" font-family="ui-monospace, 'Ubuntu Mono', 'Liberation Mono', monospace" font-size="12" font-weight="600">100% On-Device</text>
@@ -69,10 +70,10 @@
   </g>
 
   <!-- Right Column: Monograph Editorial Commentary Preview Card -->
-  <g transform="translate(694, 42)">
-    <rect x="0" y="0" width="454" height="236" rx="14" fill="#16181e" stroke="rgba(255,255,255,0.10)" stroke-width="1.5"/>
-    <path d="M 1 14 C 1 6.8 6.8 1 14 1 L 440 1 C 447.2 1 453 6.8 453 14 L 453 46 L 1 46 Z" fill="#1c1f28"/>
-    <line x1="1" y1="46" x2="453" y2="46" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <g transform="translate(700, 42)">
+    <rect x="0" y="0" width="452" height="236" rx="14" fill="#16181e" stroke="rgba(255,255,255,0.10)" stroke-width="1.5"/>
+    <path d="M 1 14 C 1 6.8 6.8 1 14 1 L 438 1 C 445.2 1 451 6.8 451 14 L 451 46 L 1 46 Z" fill="#1c1f28"/>
+    <line x1="1" y1="46" x2="451" y2="46" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
     <text x="20" y="29" font-family="ui-monospace, 'Ubuntu Mono', 'Liberation Mono', monospace" font-size="14">
       <tspan fill="#ffffff" font-weight="700">14. Nd5</tspan>
       <tspan fill="rgba(255,255,255,0.30)"> · </tspan>
