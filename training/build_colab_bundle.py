@@ -21,6 +21,16 @@ DEFAULT_PHASE6_OUTPUT_ZIP = Path("data/processed/phase6_colab_bundle.zip")
 DEFAULT_PHASE2_OUTPUT_ZIP = Path("data/processed/phase2_teacher_bundle.zip")
 DEFAULT_PHASE3_OUTPUT_ZIP = Path("data/processed/phase3_sft_bundle.zip")
 DEFAULT_PHASE4_OUTPUT_ZIP = Path("data/processed/phase4_grpo_v2_bundle.zip")
+DEFAULT_PHASE8_OUTPUT_ZIP = Path("data/processed/phase8_export_bundle.zip")
+
+PHASE8_REQUIRED_DATA_FILES: list[str] = [
+    "eval/testset-1.0.jsonl",
+    "eval/results/grpo-1.0-2b-v2_outputs.jsonl",
+    "docs/decisions/runtime.md",
+    "export/export_browser.ipynb",
+    "export/model_cards/Second-1.0-2B/README.md",
+    "export/model_cards/Second-1.0-2B-GGUF/README.md",
+]
 
 PHASE4_REQUIRED_DATA_FILES: list[str] = [
     "data/processed/rl_prompts_v2.jsonl",
@@ -85,6 +95,7 @@ CODE_DIRECTORIES: list[str] = [
     "training",
     "data/pipeline",
     "spikes/teacher_selection",
+    "export",
 ]
 
 
@@ -107,6 +118,8 @@ def collect_bundle_files(
         data_files = PHASE4_REQUIRED_DATA_FILES
     elif phase == 6:
         data_files = PHASE6_REQUIRED_DATA_FILES
+    elif phase == 8:
+        data_files = PHASE8_REQUIRED_DATA_FILES
     else:
         data_files = REQUIRED_DATA_FILES
 
@@ -229,17 +242,33 @@ def build_phase4_grpo_v2_bundle(
     )
 
 
+def build_phase8_export_bundle(
+    output_path: str | Path = DEFAULT_PHASE8_OUTPUT_ZIP,
+    repo_root: str | Path | None = None,
+) -> Path:
+    """Create the Phase 8 browser export Colab zip archive.
+
+    Package test set, baseline outputs, runtime decisions, export scripts, and model cards.
+    Return path to created zip archive.
+    """
+    return build_colab_bundle(
+        output_path=output_path,
+        repo_root=repo_root,
+        phase=8,
+    )
+
+
 def main() -> None:
     """CLI entry point for building the Colab bundle."""
     parser = argparse.ArgumentParser(
-        description="Build Colab bundle zip for Stage T2, Stage T3, Stage T4, Phase 5, or Phase 6."
+        description="Build Colab bundle zip for Stage T2, Stage T3, Stage T4, Phase 5, Phase 6, or Phase 8."
     )
     parser.add_argument(
         "--phase",
         type=int,
-        choices=[2, 3, 4, 5, 6],
-        default=4,
-        help="Target training phase (2=T2 teacher, 3=T3 SFT v2, 4=T4 GRPO v2, 5=Phase 5 SFT, 6=Phase 6 GRPO)",
+        choices=[2, 3, 4, 5, 6, 8],
+        default=8,
+        help="Target training phase (2=T2 teacher, 3=T3 SFT v2, 4=T4 GRPO v2, 5=Phase 5 SFT, 6=Phase 6 GRPO, 8=Phase 8 export)",
     )
     parser.add_argument(
         "--output",
@@ -260,6 +289,8 @@ def main() -> None:
         target_out = DEFAULT_PHASE4_OUTPUT_ZIP
     elif args.phase == 6:
         target_out = DEFAULT_PHASE6_OUTPUT_ZIP
+    elif args.phase == 8:
+        target_out = DEFAULT_PHASE8_OUTPUT_ZIP
     else:
         target_out = DEFAULT_OUTPUT_ZIP
 

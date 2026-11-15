@@ -1,29 +1,33 @@
+<p align="center">
+  <img src="docs/brand/banner.svg" alt="Second — Your local chess second" width="100%" />
+</p>
+
 # Second
+
+**Your local chess second.**
 
 Second is an open-source chess explanation system.
 Standard chess engines show numbers and move sequences.
 Second explains the ideas behind chess moves in clear language.
-The system helps beginners and intermediate players understand their games.
+The system helps beginners and club players understand their games.
+See [`docs/BRAND.md`](docs/BRAND.md) for our brand tokens, SVG marks, and voice guidelines.
 
-## Model Family
+## Model
 
-Second trains four model sizes based on the Qwen 3.5 architecture:
+Second is built around **Second-1.0-2B**, based on Qwen 3.5:
 
-- **Second-1.0-2B:** The primary model. It balances speed and quality on consumer devices.
-- **Second-1.0-0.8B:** A lightweight model. It runs fast on low-power devices and older laptops.
-- **Second-1.0-4B:** An intermediate model. It provides deeper explanations on powerful graphics cards.
-- **Second-1.0-9B:** The largest model. It runs locally on dedicated desktop workstations or servers.
-
-Every model size uses the same prompt format and training recipe.
+- **Second-1.0-2B:** Released on Hugging Face as [joebos/Second-1.0-2B](https://huggingface.co/joebos/Second-1.0-2B) and quantized WebAssembly shards [joebos/Second-1.0-2B-GGUF](https://huggingface.co/joebos/Second-1.0-2B-GGUF).
+- **Prompt contract:** Explains moves and positions for `beginner` and `club` levels in `short` and `long` detail.
 
 ## Browser Extension
 
 The project includes a Manifest V3 browser extension for Lichess.
 The extension runs inside the Chrome side panel.
-It executes the model directly on your local GPU with WebGPU.
-Stockfish runs locally in WebAssembly.
-Your game data stays private.
-The extension sends no positions to external model servers.
+It runs the language model locally on your device in WebAssembly (`wllama`).
+Stockfish also runs locally in WebAssembly.
+An optional Lichess Cloud Eval toggle (on by default) checks cached Lichess evaluations before falling back to local Stockfish.
+Turn off **Use Lichess Cloud Eval** in Settings to evaluate every position locally.
+Prompts and commentary stay on your device.
 
 ### Fair-Play Rule
 
@@ -38,16 +42,18 @@ The extension permits analysis only on these pages:
 When an active game is open, the panel displays:
 > "Second is off during live games. Open the game after it ends."
 
-## Current Status (Certified `Second-1.0-2B` Release Candidate)
+## Current Status (`Second-1.0-2B` v1.0.0 Soft Release)
 
-Phases 0 through 7 (including the Phase 6.5 capability iteration in [`TRAINING_PLAN.md`](TRAINING_PLAN.md)) are **complete**. The winning 2B model (`RL-B2`, trained with SFT v2 `r=32` + 150 steps of token-level DAPO GRPO v2 with Reward v2) passed Stage T6 verification on the frozen 300-item test set ([`eval/reports/grpo-1.0-2b-v2.md`](eval/reports/grpo-1.0-2b-v2.md)):
-- **Hard-Fail Rate (All 9 Deterministic Checks)**: `4.67%` (`14 / 300` items, gate $\le 5.0\%$)
+Phases 0 through 9 are **complete**, and `Second-1.0-2B` is published on Hugging Face:
+- **Hard-Fail Rate (All 9 Deterministic Checks)**: `4.67%` (`14 / 300` items, gate $\le 5.0\%$) — [`eval/reports/Second-1.0-2B.md`](eval/reports/Second-1.0-2B.md)
 - **In-Band Length Rate**: `99.67%` (`62.0` words mean, gate $\ge 80.0\%$)
 - **First-Person Diary Voice Rate**: `0.00%` (down from `51.3%` in Iteration 1)
 - **Better-Move Counterfactual Score**: `1.0000` (`100.0%` on bad moves)
 - **Debiased Gemini Judge Overall**: `3.96 / 5.0` (up from `2.78` in Iteration 1)
 - **Pairwise Win Rate**: `281W–0L` (`100.0%` decisive win rate, `97.5%` LC-WR) vs Iteration 1 `grpo-1.0-2b`, `293W–0L` (`86.2%` LC-WR) vs `base-qwen-2b`, and `202W–20L` (`91.0%` decisive win rate, `74.5%` LC-WR) vs `gemini-flash`.
-- **Next Active Phase**: **Phase 8 (Browser GGUF `Q4_K_M` Export for `wllama`)** $\to$ **Phase 9 (Lichess Browser Extension)**.
+- **Phase 8 (Browser Export & Quantization)**: Merged, stripped vision tower, quantized to `Q4_K_M` GGUF (`1,204.9 MiB`, `4.00%` post-quantization hard-fail rate on 100 test prompts), and uploaded to [joebos/Second-1.0-2B](https://huggingface.co/joebos/Second-1.0-2B) and [joebos/Second-1.0-2B-GGUF](https://huggingface.co/joebos/Second-1.0-2B-GGUF).
+- **Phase 9 (Browser Extension)**: Built and verified in [`extension/`](extension/) (`wllama` WASM inference, local Stockfish WASM, polite Lichess Cloud Eval, fail-closed fair-play lock, and Monograph side panel UI). Run `npm run package` in `extension/` to build `extension/release/second-extension-v1.0.0.zip`.
+- **Demo Space**: Gradio demo app in [`demo_space/`](demo_space/) for Hugging Face Spaces ([joebos/second-chess-demo](https://huggingface.co/spaces/joebos/second-chess-demo)).
 
 ## Repository Layout
 
@@ -58,6 +64,8 @@ second/
 ├── PLAN.md                  # Master project plan (Phases 0–12)
 ├── TRAINING_PLAN.md         # Phase 6.5 capability iteration plan & Stage T0–T6 results
 ├── docs/                    # Architecture records and specifications
+│   ├── brand/               # Brand vectors (logo mark, lockup, banner, social preview)
+│   ├── BRAND.md             # Brand identity, Monograph palette, and voice guide
 │   ├── decisions/           # Runtime (wllama GGUF), compute, and teacher model records
 │   ├── data_sources.md      # Data licensing and pipeline plans
 │   └── prompt_format.md     # Input prompt contract (Phase 1)
@@ -85,11 +93,13 @@ second/
 │   ├── rating_space/        # Human evaluation Gradio Space
 │   ├── results/             # Benchmark test results and experiment_ledger.jsonl
 │   └── reports/             # Model evaluation reports (grpo-1.0-2b-v2.md, Second-1.0-2B.md)
-├── export/                  # LoRA merge and GGUF Q4_K_M browser conversion (Phase 8 — Next)
+├── export/                  # LoRA merge and GGUF Q4_K_M browser conversion (Phase 8)
 ├── extension/               # Lichess Chrome extension (GPLv3) (Phase 9)
 │   ├── LICENSE              # GNU General Public License v3.0
+│   ├── manifest.json        # Extension Manifest V3 configuration
 │   ├── src/                 # Extension source code
-│   ├── public/              # Static assets and manifest
+│   ├── public/              # Static assets (WASM, Stockfish, icons)
+│   ├── store/               # Chrome Web Store copy and promo assets
 │   └── TESTING.md           # Extension test checklist
 ├── spikes/                  # Research prototypes and benchmarks (Phase 0 & Stage T2.1)
 └── .github/workflows/       # CI test pipelines (Phase 1)
@@ -183,3 +193,11 @@ This project uses dual licensing:
    The GNU General Public License v3.0 governs all files in the `extension/` directory.
    The extension uses GPLv3 because it bundles the Stockfish chess engine.
    See [extension/LICENSE](extension/LICENSE) for the full text.
+
+## Sponsoring
+
+Second is free, open-source, and privacy-first.
+It has no subscription paywalls or user tracking.
+To support future GPU training runs and evaluations, [sponsor the project on GitHub](https://github.com/sponsors/kleinebossie).
+See [SPONSORS.md](SPONSORS.md) for sponsorship tiers and backer acknowledgments.
+

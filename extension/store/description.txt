@@ -1,0 +1,35 @@
+Second - Local AI Chess Coach
+==============================
+
+Tagline:
+--------
+Your local chess second.
+
+Short Description:
+------------------
+Clear chess move explanations on your device. Active only after games end.
+
+Detailed Description:
+---------------------
+Second is your local chess second in the Chrome side panel.
+Standard engines show raw numbers like +1.4 or -2.8.
+Second explains why moves are good or bad in plain English.
+
+Key Features:
+- Explain Move: Stream move commentary with tactical ideas, candidate lines, and alternatives.
+- Longer Commentary: Generate a deeper explanation for the selected move.
+- Local Stockfish + Optional Cloud Eval: Uses local Stockfish WebAssembly and optional Lichess Cloud Eval (on by default; turn off in Settings for offline position evaluation).
+- On-Device AI Inference: Language models run locally in your browser via WebAssembly (wllama). Prompts and commentary stay on your device.
+- Feedback Ratings: Save thumbs up or down ratings locally and export them as JSON.
+
+Fair-Play Guarantee:
+--------------------
+Second is built only for study, learning, and post-game review.
+Second works only after a game ends.
+A fail-closed lock disables analysis during active live games, puzzles, and tactical modes.
+
+Requirements:
+-------------
+- Google Chrome or a Chromium browser with Manifest V3 Side Panel support.
+- ~1.2 GB of free disk space for Second 2B weights.
+- A modern laptop or desktop computer.

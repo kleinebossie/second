@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Second — Local AI Chess Coach</title>
+  <link rel="icon" type="image/png" href="./icons/icon128.png" />
+  <style>
+    :root {
+      --bg: #12141a;
+      --surface: #1b1f29;
+      --surface-alt: #232836;
+      --border: #2e3444;
+      --text: #ece9e0;
+      --muted: #9aa3b2;
+      --gold: #e5c07b;
+      --emerald: #34d399;
+      --red: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    .page {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 22px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+    .brand p { margin: 0; color: var(--muted); font-size: 13px; }
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--gold);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 22px;
+    }
+    @media (max-width: 840px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    select, textarea {
+      width: 100%;
+      background: #12141a;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      margin-bottom: 14px;
+    }
+    textarea {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px;
+      resize: vertical;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .row > div { flex: 1; min-width: 140px; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      background: var(--surface-alt);
+      color: var(--text);
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.primary {
+      background: var(--gold);
+      color: #16181e;
+      border-color: var(--gold);
+    }
+    .board-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 44px);
+      grid-template-rows: repeat(8, 44px);
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      user-select: none;
+    }
+    @media (max-width: 480px) {
+      .board-grid {
+        grid-template-columns: repeat(8, 36px);
+        grid-template-rows: repeat(8, 36px);
+      }
+    }
+    .sq {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      position: relative;
+    }
+    .sq.light { background: #ead9bc; color: #1f232c; }
+    .sq.dark { background: #b58863; color: #1f232c; }
+    .sq.highlight { box-shadow: inset 0 0 0 3px rgba(52, 211, 153, 0.85); }
+    .piece-w { color: #ffffff; text-shadow: 0 1px 2px #000000aa; }
+    .piece-b { color: #14161b; }
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #12141a;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 8px 0 14px;
+      display: none;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--emerald);
+      transition: width 0.2s ease;
+    }
+    .output {
+      background: #12141a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 130px;
+      white-space: pre-wrap;
+      font-size: 15px;
+    }
+    .verdict {
+      display: inline-block;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+    details { margin-top: 12px; font-size: 12px; color: var(--muted); }
+    pre {
+      background: #12141a;
+      border: 1px solid var(--border);
+      padding: 10px;
+      border-radius: 6px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <img src="./icons/icon128.png" alt="Second logo" width="36" height="36" />
+        <div>
+          <h1>Second — Local AI Chess Coach</h1>
+          <p>Runs Stockfish + Second-1.0-2B locally in your browser (WebAssembly).</p>
+        </div>
+      </div>
+      <span class="pill">Second-1.0-2B · Client-Side</span>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <label for="preset">Example Positions</label>
+        <select id="preset"></select>
+
+        <label for="chess-input">Paste PGN or FEN</label>
+        <textarea id="chess-input" rows="4" placeholder="Paste a PGN game or FEN string..."></textarea>
+
+        <div class="row">
+          <button id="btn-parse" type="button">Load Moves</button>
+          <button id="btn-download" type="button">Download Second-1.0-2B (~1.2 GB)</button>
+        </div>
+
+        <div id="download-progress" class="progress-bar">
+          <div id="download-fill" class="progress-fill"></div>
+        </div>
+        <div id="status" class="status">Ready to load a game or position.</div>
+
+        <label for="move-select">Move to Explain</label>
+        <select id="move-select"></select>
+
+        <div class="row">
+          <div>
+            <label for="level-select">Coach Style</label>
+            <select id="level-select">
+              <option value="club" selected>Club (~1200–2000)</option>
+              <option value="beginner">Beginner (&lt;1200)</option>
+            </select>
+          </div>
+          <div>
+            <label for="detail-select">Detail</label>
+            <select id="detail-select">
+              <option value="short" selected>Short (2–4 sentences)</option>
+              <option value="long">Long (Deeper)</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="btn-explain" class="primary" type="button" style="width: 100%;">
+          Explain Selected Move
+        </button>
+      </section>
+
+      <section class="card">
+        <div class="board-container">
+          <div id="board" class="board-grid" aria-label="Chess board"></div>
+        </div>
+        <div id="verdict" class="verdict"></div>
+        <div id="output" class="output">Click "Download Second-1.0-2B (~1.2 GB)" once, then click "Explain Selected Move".</div>
+        <details>
+          <summary>Prompt &amp; Stockfish Facts Sent to Model</summary>
+          <pre id="prompt-debug">(none yet)</pre>
+        </details>
+      </section>
+    </div>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

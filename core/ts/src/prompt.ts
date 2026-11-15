@@ -67,11 +67,11 @@ export function buildUserMessage(
     if (bestM && pos.isLegal(bestM)) {
       bestMoveSan = makeSan(pos, bestM);
     }
-    const bestLineSans = uciLineToSan(fen, bestMovesUci, 6);
+    const bestLineSans = uciLineToSan(fen, bestMovesUci, 6, pos);
     bestLineSan = bestLineSans.join(" ");
   }
 
-  const facts = extractFacts(task, fen, evalBefore, evalAfter, moveUci);
+  const facts = extractFacts(task, fen, evalBefore, evalAfter, moveUci, pos);
   const factsLines = facts.map((f) => `- ${f}`);
 
   if (task === "explain_move") {
@@ -83,7 +83,12 @@ export function buildUserMessage(
       throw new Error(`Invalid or illegal move_uci: ${moveUci}`);
     }
     const moveSan = makeSan(pos, moveObj);
-    const verdict = classifyVerdict(evalBefore, evalAfter, moveUci);
+    const verdict = classifyVerdict(
+      evalBefore,
+      evalAfter,
+      moveUci,
+      evalBefore.fen === fen ? pos : undefined
+    );
 
     let wcAfter = wcBefore;
     if (

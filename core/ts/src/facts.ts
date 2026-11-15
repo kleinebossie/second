@@ -5,11 +5,11 @@
  */
 
 import { Chess } from "chessops";
-import { attacks } from "chessops/attacks";
+import { attacks, ray } from "chessops/attacks";
 import { parseFen } from "chessops/fen";
 import { makeSan, makeSanAndPlay } from "chessops/san";
 import { Color, isNormal, NormalMove, Role } from "chessops/types";
-import { kingCastlesTo, makeSquare, opposite, parseUci, squareRank } from "chessops/util";
+import { kingCastlesTo, makeSquare, opposite, parseUci, roleToChar, squareRank } from "chessops/util";
 import { lookupOpening } from "./openings.js";
 
 export interface EngineScore {
@@ -150,6 +150,26 @@ export function roundPct(val: number): number {
   return Math.floor(val + 0.5);
 }
 
+function hasSingleLegalMove(pos: Chess): boolean {
+  let count = 0;
+  const turn = pos.turn;
+  const promoRank = turn === "white" ? 7 : 0;
+
+  for (const [from, dests] of pos.allDests()) {
+    const piece = pos.board.get(from);
+    if (!piece) continue;
+    for (const dest of dests) {
+      if (piece.role === "pawn" && squareRank(dest) === promoRank && !pos.board[turn].has(dest)) {
+        count += 4;
+      } else {
+        count += 1;
+      }
+      if (count > 1) return false;
+    }
+  }
+  return count === 1;
+}
+
 /**
  * Classify the quality of a played move.
  * If the move is best and other moves lose win chance, return Only move.
@@ -161,12 +181,15 @@ export function roundPct(val: number): number {
 export function classifyVerdict(
   evalBefore: EngineEval,
   evalAfter: EngineEval | null | undefined,
-  moveUci: string
+  moveUci: string,
+  parsedPos?: Chess
 ): Verdict {
-  const parseRes = parseFen(evalBefore.fen);
-  const isWhite = parseRes.isOk
-    ? parseRes.value.turn === "white"
-    : evalBefore.fen.split(" ")[1] === "w";
+  const parseRes = parsedPos ? null : parseFen(evalBefore.fen);
+  const isWhite = parsedPos
+    ? parsedPos.turn === "white"
+    : parseRes!.isOk
+      ? parseRes!.value.turn === "white"
+      : evalBefore.fen.split(" ")[1] === "w";
   const pvs = evalBefore.pvs ?? [];
   const bestMoveUci =
     pvs.length > 0 && pvs[0].moves && pvs[0].moves.length > 0
@@ -186,9 +209,13 @@ export function classifyVerdict(
   }
 
   if (moveUci === bestMoveUci) {
-    if (parseRes.isOk) {
+    if (parsedPos) {
+      if (hasSingleLegalMove(parsedPos)) {
+        return "Only move";
+      }
+    } else if (parseRes && parseRes.isOk) {
       const chessRes = Chess.fromSetup(parseRes.value);
-      if (chessRes.isOk && getLegalMoves(chessRes.value).length === 1) {
+      if (chessRes.isOk && hasSingleLegalMove(chessRes.value)) {
         return "Only move";
       }
     }
@@ -224,50 +251,28 @@ export function classifyVerdict(
 export function uciLineToSan(
   fen: string,
   uciMoves: string[],
-  maxPlies = 6
+  maxPlies = 6,
+  parsedPos?: Chess
 ): string[] {
-  const parseRes = parseFen(fen);
-  if (parseRes.isErr) return [];
-  const chessRes = Chess.fromSetup(parseRes.value);
-  if (chessRes.isErr) return [];
-  const pos = chessRes.value;
+  let pos: Chess;
+  if (parsedPos) {
+    pos = parsedPos.clone();
+  } else {
+    const parseRes = parseFen(fen);
+    if (parseRes.isErr) return [];
+    const chessRes = Chess.fromSetup(parseRes.value);
+    if (chessRes.isErr) return [];
+    pos = chessRes.value;
+  }
 
   const sanList: string[] = [];
-  for (const uci of uciMoves.slice(0, maxPlies)) {
-    const move = parseUci(uci);
+  const limit = Math.min(uciMoves.length, maxPlies);
+  for (let i = 0; i < limit; i++) {
+    const move = parseUci(uciMoves[i]);
     if (!move || !pos.isLegal(move)) break;
     sanList.push(makeSanAndPlay(pos, move));
   }
   return sanList;
-}
-
-/**
- * Compute total material points for one color.
- * Kings have zero material points.
- */
-function totalMaterialPoints(pos: Chess, color: Color): number {
-  let pts = 0;
-  for (let sq = 0; sq < 64; sq++) {
-    const p = pos.board.get(sq);
-    if (p && p.color === color && p.role !== "king") {
-      pts += PIECE_VALUES[p.role];
-    }
-  }
-  return pts;
-}
-
-/**
- * Count pieces of a specific role and color.
- */
-function countPieceRole(pos: Chess, color: Color, role: Role): number {
-  let count = 0;
-  for (let sq = 0; sq < 64; sq++) {
-    const p = pos.board.get(sq);
-    if (p && p.color === color && p.role === role) {
-      count++;
-    }
-  }
-  return count;
 }
 
 /**
@@ -276,8 +281,24 @@ function countPieceRole(pos: Chess, color: Color, role: Role): number {
  * When one side has more material, name the advantage.
  */
 export function computeMaterialFact(pos: Chess): string {
-  const whitePts = totalMaterialPoints(pos, "white");
-  const blackPts = totalMaterialPoints(pos, "black");
+  const b = pos.board;
+  const wMask = b.white;
+  const bMask = b.black;
+
+  const wP = b.pawn.intersect(wMask).size();
+  const wN = b.knight.intersect(wMask).size();
+  const wB = b.bishop.intersect(wMask).size();
+  const wR = b.rook.intersect(wMask).size();
+  const wQ = b.queen.intersect(wMask).size();
+
+  const bP = b.pawn.intersect(bMask).size();
+  const bN = b.knight.intersect(bMask).size();
+  const bB = b.bishop.intersect(bMask).size();
+  const bR = b.rook.intersect(bMask).size();
+  const bQ = b.queen.intersect(bMask).size();
+
+  const whitePts = wP + 3 * (wN + wB) + 5 * wR + 9 * wQ;
+  const blackPts = bP + 3 * (bN + bB) + 5 * bR + 9 * bQ;
   const diff = whitePts - blackPts;
 
   if (diff === 0) {
@@ -285,21 +306,20 @@ export function computeMaterialFact(pos: Chess): string {
   }
 
   const winnerName = diff > 0 ? "White" : "Black";
-  const winnerColor: Color = diff > 0 ? "white" : "black";
-  const loserColor: Color = diff > 0 ? "black" : "white";
   const adv = Math.abs(diff);
+  const wWinner = diff > 0;
 
-  const netP = Math.max(0, countPieceRole(pos, winnerColor, "pawn") - countPieceRole(pos, loserColor, "pawn"));
-  const netN = Math.max(0, countPieceRole(pos, winnerColor, "knight") - countPieceRole(pos, loserColor, "knight"));
-  const netB = Math.max(0, countPieceRole(pos, winnerColor, "bishop") - countPieceRole(pos, loserColor, "bishop"));
-  const netR = Math.max(0, countPieceRole(pos, winnerColor, "rook") - countPieceRole(pos, loserColor, "rook"));
-  const netQ = Math.max(0, countPieceRole(pos, winnerColor, "queen") - countPieceRole(pos, loserColor, "queen"));
+  const netP = Math.max(0, wWinner ? wP - bP : bP - wP);
+  const netN = Math.max(0, wWinner ? wN - bN : bN - wN);
+  const netB = Math.max(0, wWinner ? wB - bB : bB - wB);
+  const netR = Math.max(0, wWinner ? wR - bR : bR - wR);
+  const netQ = Math.max(0, wWinner ? wQ - bQ : bQ - wQ);
 
-  const loserNetP = Math.max(0, countPieceRole(pos, loserColor, "pawn") - countPieceRole(pos, winnerColor, "pawn"));
-  const loserNetN = Math.max(0, countPieceRole(pos, loserColor, "knight") - countPieceRole(pos, winnerColor, "knight"));
-  const loserNetB = Math.max(0, countPieceRole(pos, loserColor, "bishop") - countPieceRole(pos, winnerColor, "bishop"));
-  const loserNetR = Math.max(0, countPieceRole(pos, loserColor, "rook") - countPieceRole(pos, winnerColor, "rook"));
-  const loserNetQ = Math.max(0, countPieceRole(pos, loserColor, "queen") - countPieceRole(pos, winnerColor, "queen"));
+  const loserNetP = Math.max(0, wWinner ? bP - wP : wP - bP);
+  const loserNetN = Math.max(0, wWinner ? bN - wN : wN - bN);
+  const loserNetB = Math.max(0, wWinner ? bB - wB : wB - bB);
+  const loserNetR = Math.max(0, wWinner ? bR - wR : wR - bR);
+  const loserNetQ = Math.max(0, wWinner ? bQ - wQ : wQ - bQ);
 
   // Single-type clean advantages
   if (
@@ -436,6 +456,35 @@ export function computeHangingFacts(pos: Chess): string[] {
   return facts.slice(0, 2);
 }
 
+function compareLegalMoves(a: LegalMoveInfo, b: LegalMoveInfo): number {
+  return a.from !== b.from
+    ? a.from - b.from
+    : a.to !== b.to
+    ? a.to - b.to
+    : a.promotionVal - b.promotionVal;
+}
+
+function mightGiveCheck(pos: Chess, move: NormalMove, enemyKingSq: number | undefined): boolean {
+  if (enemyKingSq === undefined) return false;
+  const moverRole = pos.board.getRole(move.from);
+  if (!moverRole) return true;
+  const effectiveRole = move.promotion ?? moverRole;
+  const occAfter = pos.board.occupied.without(move.from).with(move.to);
+  if (attacks({ color: pos.turn, role: effectiveRole }, move.to, occAfter).has(enemyKingSq)) {
+    return true;
+  }
+  if (ray(move.from, enemyKingSq).nonEmpty()) {
+    return true;
+  }
+  if (moverRole === "pawn" && pos.epSquare !== undefined && move.to === pos.epSquare) {
+    return true;
+  }
+  if (moverRole === "king" && (pos.board[pos.turn].has(move.to) || Math.abs(move.to - move.from) === 2)) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Find available checks and high value captures.
  * If a check is legal, record the first check.
@@ -447,28 +496,18 @@ export function computeChecksAndCapturesFacts(pos: Chess): string[] {
   let checkMoveSan: string | null = null;
 
   const legalMoves = getLegalMoves(pos);
+  legalMoves.sort(compareLegalMoves);
 
-  // Check moves
-  const checks: LegalMoveInfo[] = [];
+  const enemyKingSq = pos.board.kingOf(opposite(pos.turn));
   for (const m of legalMoves) {
+    if (!mightGiveCheck(pos, m.move, enemyKingSq)) continue;
     const clone = pos.clone();
     clone.play(m.move);
     if (clone.isCheck()) {
-      checks.push(m);
+      checkMoveSan = makeSan(pos, m.move);
+      facts.push(`${sideName} has a check: ${checkMoveSan}.`);
+      break;
     }
-  }
-
-  if (checks.length > 0) {
-    checks.sort((a, b) =>
-      a.from !== b.from
-        ? a.from - b.from
-        : a.to !== b.to
-        ? a.to - b.to
-        : a.promotionVal - b.promotionVal
-    );
-    const checkMove = checks[0];
-    checkMoveSan = makeSan(pos, checkMove.move);
-    facts.push(`${sideName} has a check: ${checkMoveSan}.`);
   }
 
   // Captures of non-pawn pieces
@@ -537,26 +576,30 @@ export function computeThreatFact(pos: Chess, color: Color): string | null {
   const colorName = color === "white" ? "White" : "Black";
   const enemyColor = opposite(color);
   const legalMoves = getLegalMoves(temp);
+  legalMoves.sort(compareLegalMoves);
 
-  // Category A: Checkmate
-  const mateMoves: LegalMoveInfo[] = [];
+  // Category A + C pre-scan: only checking moves can deliver checkmate or a safe check.
+  // Because legalMoves is sorted by (from, to, promotionVal), the first mate and first safe
+  // check encountered match the exact deterministic tie-breaking order.
+  const enemyKingSq = temp.board.kingOf(enemyColor);
+  let firstSafeCheck: LegalMoveInfo | null = null;
   for (const m of legalMoves) {
+    if (!mightGiveCheck(temp, m.move, enemyKingSq)) continue;
     const afterM = temp.clone();
     afterM.play(m.move);
-    if (afterM.isCheckmate()) {
-      mateMoves.push(m);
+    if (afterM.isCheck()) {
+      if (afterM.isCheckmate()) {
+        return `${colorName} threatens ${makeSan(temp, m.move)}.`;
+      }
+      if (firstSafeCheck === null) {
+        const isSafe =
+          afterM.kingAttackers(m.move.to, enemyColor, afterM.board.occupied).isEmpty() ||
+          afterM.kingAttackers(m.move.to, color, afterM.board.occupied).nonEmpty();
+        if (isSafe) {
+          firstSafeCheck = m;
+        }
+      }
     }
-  }
-
-  if (mateMoves.length > 0) {
-    mateMoves.sort((a, b) =>
-      a.from !== b.from
-        ? a.from - b.from
-        : a.to !== b.to
-        ? a.to - b.to
-        : a.promotionVal - b.promotionVal
-    );
-    return `${colorName} threatens ${makeSan(temp, mateMoves[0].move)}.`;
   }
 
   // Category B: Winning capture
@@ -609,29 +652,8 @@ export function computeThreatFact(pos: Chess, color: Color): string | null {
   }
 
   // Category C: Safe check
-  const safeChecks: LegalMoveInfo[] = [];
-  for (const m of legalMoves) {
-    const afterM = temp.clone();
-    afterM.play(m.move);
-    if (afterM.isCheck()) {
-      const isSafe =
-        afterM.kingAttackers(m.move.to, enemyColor, afterM.board.occupied).isEmpty() ||
-        afterM.kingAttackers(m.move.to, color, afterM.board.occupied).nonEmpty();
-      if (isSafe) {
-        safeChecks.push(m);
-      }
-    }
-  }
-
-  if (safeChecks.length > 0) {
-    safeChecks.sort((a, b) =>
-      a.from !== b.from
-        ? a.from - b.from
-        : a.to !== b.to
-        ? a.to - b.to
-        : a.promotionVal - b.promotionVal
-    );
-    return `${colorName} threatens ${makeSan(temp, safeChecks[0].move)}.`;
+  if (firstSafeCheck !== null) {
+    return `${colorName} threatens ${makeSan(temp, firstSafeCheck.move)}.`;
   }
 
   return null;
@@ -1368,8 +1390,8 @@ export function computeRefutationReasonFact(
 ): string | null {
   const actualMoveUci =
     moveUci ??
-    `${makeSquare(move.from)}${makeSquare(move.to)}${move.promotion ? move.promotion[0] : ""}`;
-  const verdict = classifyVerdict(evalBefore, evalAfter, actualMoveUci);
+    `${makeSquare(move.from)}${makeSquare(move.to)}${move.promotion ? roleToChar(move.promotion) : ""}`;
+  const verdict = classifyVerdict(evalBefore, evalAfter, actualMoveUci, posBefore);
   if (verdict !== "Inaccuracy" && verdict !== "Mistake" && verdict !== "Blunder") {
     return null;
   }
@@ -1468,13 +1490,17 @@ export function appendPositionFacts(
   board: Chess,
   fen: string,
   moveUci: string | null | undefined,
-  rawFacts: Array<string | null>
+  rawFacts: Array<string | null>,
+  parsedPosBefore?: Chess
 ): void {
-  const parseRes = parseFen(fen);
-  if (parseRes.isErr) return;
-  const chessRes = Chess.fromSetup(parseRes.value);
-  if (chessRes.isErr) return;
-  const posBefore = chessRes.value;
+  let posBefore = parsedPosBefore;
+  if (!posBefore) {
+    const parseRes = parseFen(fen);
+    if (parseRes.isErr) return;
+    const chessRes = Chess.fromSetup(parseRes.value);
+    if (chessRes.isErr) return;
+    posBefore = chessRes.value;
+  }
 
   for (const f of computeHangingFacts(board)) {
     rawFacts.push(f);
@@ -1510,17 +1536,21 @@ export function extractFacts(
   fen: string,
   evalBefore: EngineEval,
   evalAfter?: EngineEval | null,
-  moveUci?: string | null
+  moveUci?: string | null,
+  parsedPos?: Chess
 ): string[] {
-  const parseRes = parseFen(fen);
-  if (parseRes.isErr) {
-    throw new Error(`Invalid FEN: ${fen}`);
+  let posBefore = parsedPos;
+  if (!posBefore) {
+    const parseRes = parseFen(fen);
+    if (parseRes.isErr) {
+      throw new Error(`Invalid FEN: ${fen}`);
+    }
+    const chessRes = Chess.fromSetup(parseRes.value);
+    if (chessRes.isErr) {
+      throw new Error(`Invalid setup for FEN: ${fen}`);
+    }
+    posBefore = chessRes.value;
   }
-  const chessRes = Chess.fromSetup(parseRes.value);
-  if (chessRes.isErr) {
-    throw new Error(`Invalid setup for FEN: ${fen}`);
-  }
-  const posBefore = chessRes.value;
   const rawFacts: Array<string | null> = [];
 
   if (task === "explain_move") {
@@ -1551,7 +1581,7 @@ export function extractFacts(
     rawFacts.push(computeRefutationReasonFact(posBefore, move, posAfter, evalBefore, evalAfter, moveUci));
 
     // Shared position facts
-    appendPositionFacts(posAfter, fen, moveUci, rawFacts);
+    appendPositionFacts(posAfter, fen, moveUci, rawFacts, posBefore);
   } else if (task === "explain_position") {
     // 1. Candidate moves fact
     const pvs = evalBefore.pvs ?? [];
@@ -1575,7 +1605,7 @@ export function extractFacts(
     }
 
     // 2-8. Shared position facts
-    appendPositionFacts(posBefore, fen, null, rawFacts);
+    appendPositionFacts(posBefore, fen, null, rawFacts, posBefore);
   } else {
     throw new Error(`Unknown task: ${task}`);
   }

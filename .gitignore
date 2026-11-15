@@ -42,6 +42,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 extension/dist/
+extension/release/
 dist/
 dist-ext/
 spikes/browser-runtime/public/
@@ -72,6 +73,8 @@ stockfish_bin/
 data/cache/
 data/raw/
 data/processed/
+demo_space/dist/
+demo_space/dist_static/
 .cache/
 eval/rating_space/chesscom_pairs.jsonl
 eval/rating_space/votes.jsonl

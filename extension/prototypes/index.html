@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Second Chess Coach — Layer 6: Exact Pixel-Polished Floating Dock & Header</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #090a0d;
+      color: #e2e8f0;
+      line-height: 1.5;
+      padding: 24px 16px 80px 16px;
+      min-height: 100vh;
+    }
+
+    /* Top Control Bar */
+    .showcase-header {
+      max-width: 1480px;
+      margin: 0 auto 24px auto;
+      background: #11141b;
+      border: 1px solid #1e2430;
+      border-radius: 16px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .header-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .showcase-title-area h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-stage {
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .showcase-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    /* Controls Strip */
+    .controls-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid #1a202c;
+    }
+
+    .segmented-control {
+      display: inline-flex;
+      background: #0a0c10;
+      border: 1px solid #232936;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .segmented-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .segmented-btn:hover {
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .segmented-btn.active {
+      background: #252d3d;
+      color: #34d399;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .state-toggle-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .state-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: 0.06em;
+    }
+
+    /* Prototype Grid */
+    .prototype-stage {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 22px;
+      align-items: start;
+    }
+
+    .prototype-stage.single-view {
+      grid-template-columns: 1fr;
+      max-width: 420px;
+    }
+
+    .direction-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.25s ease;
+    }
+
+    .direction-header-card {
+      background: #11141b;
+      border: 1px solid #1e2430;
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+
+    .dir-number {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .dir-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-top: 2px;
+    }
+
+    .dir-philosophy {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .sidepanel-frame {
+      width: 100%;
+      height: 650px;
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #121316;
+    }
+
+    .browser-panel-bar {
+      height: 28px;
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 10.5px;
+      color: rgba(255, 255, 255, 0.4);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .browser-dots {
+      display: flex;
+      gap: 5px;
+    }
+    .browser-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Monograph Canvas */
+    .prose-scroll-container {
+      padding: 18px 16px 72px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: calc(100% - 28px);
+      overflow-y: auto;
+      position: relative;
+    }
+
+    /* Cleaned Pure Typographic Headers (No pill background!) */
+    .panel-header-clean {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: 'Geist', sans-serif;
+    }
+
+    .panel-move-title {
+      font-family: 'Geist Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      line-height: 1;
+    }
+
+    .verdict-text-blunder {
+      color: #f87171;
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .panel-model-label {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: #8e8a83;
+      letter-spacing: 0.02em;
+    }
+
+    /* Commentary Stream */
+    .commentary-body {
+      font-family: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13.5px;
+      line-height: 1.72;
+      color: #ded8cb;
+      flex: 1;
+    }
+
+    /* Highlight Accents */
+    .tok-piece {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .tok-move {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e5c07b;
+      border-bottom: 1px dashed rgba(229, 192, 123, 0.6);
+      padding: 0 1px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .tok-move:hover {
+      color: #ffd88b;
+      border-bottom-style: solid;
+    }
+
+    /* 5B-derived Square with pronounced underline */
+    .tok-square-solid {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      color: #cbd5e1;
+      border-bottom: 1.5px solid rgba(203, 213, 225, 0.7);
+      padding: 0 1px;
+    }
+
+    .tok-square-dashed {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      color: #cbd5e1;
+      border-bottom: 1.5px dashed rgba(203, 213, 225, 0.7);
+      padding: 0 1px;
+    }
+
+    /* ==========================================================================
+       THE EXACT RESTORED 4B BASE BOTTOM DOCK (MATCHING IMAGE 2 EXACTLY)
+       ========================================================================== */
+    .island-dock-restored {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      right: 16px;
+      background: rgba(22, 24, 30, 0.90);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 11px;
+      padding: 9px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+
+    /* "Longer": quiet text idle -> 4B-1 tactile pill on hover */
+    .btn-longer-action {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #f1ebd9;
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      line-height: 1;
+    }
+    .btn-longer-action:hover {
+      background: #252834;
+      border-color: #363b4c;
+      color: #fff;
+    }
+
+    /* Naked vector thumbs: NO button background at all! Only colored strokes */
+    .vote-pair-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-bare-thumb {
+      background: transparent;
+      border: 1px solid transparent;
+      width: 32px;
+      height: 32px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+    .btn-bare-thumb svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 0.18s ease;
+    }
+
+    /* Green outline thumb */
+    .btn-bare-thumb.thumb-up svg {
+      stroke: #34d399;
+    }
+    /* Red outline thumb */
+    .btn-bare-thumb.thumb-down svg {
+      stroke: #f87171;
+    }
+
+    /* On hover: muted NON-COLORED square popup */
+    .btn-bare-thumb:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Active clicked state */
+    .btn-bare-thumb.thumb-up.active {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .btn-bare-thumb.thumb-up.active svg {
+      fill: rgba(52, 211, 153, 0.25);
+    }
+    .btn-bare-thumb.thumb-down.active {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .btn-bare-thumb.thumb-down.active svg {
+      fill: rgba(248, 113, 113, 0.25);
+    }
+
+    /* Feedback Dock */
+    .feedback-dock {
+      max-width: 1480px;
+      margin: 28px auto 0 auto;
+      background: #11141b;
+      border: 1px solid #1e2430;
+      border-radius: 16px;
+      padding: 20px 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .feedback-dock-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feedback-dock-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feedback-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .feedback-chip {
+      background: #181d27;
+      border: 1px solid #283142;
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .feedback-chip:hover {
+      border-color: #34d399;
+      color: #34d399;
+      background: rgba(52, 211, 153, 0.08);
+    }
+
+    .feedback-chip.selected {
+      background: rgba(52, 211, 153, 0.15);
+      border-color: #34d399;
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    .feedback-action-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .feedback-input {
+      flex: 1;
+      background: #0a0c10;
+      border: 1px solid #283142;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .feedback-copy-btn {
+      background: #34d399;
+      color: #0b1120;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+    .feedback-copy-btn:hover {
+      background: #6ee7b7;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Showcase Controls -->
+  <div class="showcase-header">
+    <div class="header-top-row">
+      <div class="showcase-title-area">
+        <h1>
+          Second — Layer 6: Exact Pixel-Polished Floating Dock & Header
+          <span class="badge-stage">Final Polish Phase</span>
+        </h1>
+        <p class="showcase-subtitle">
+          Restored exact base 4B floating bar from Image 2; naked green/red vector thumbs with muted non-colored hover square; clean ghost "Longer" button; pure typographic top-left (no red pill background); pronounced 5B slate square underlines.
+        </p>
+      </div>
+
+      <!-- Single vs Grid View -->
+      <div class="segmented-control">
+        <button class="segmented-btn active" id="btn-view-grid" onclick="setViewMode('grid')">
+          <span>⊞</span> Grid View
+        </button>
+        <button class="segmented-btn" id="btn-view-6a" onclick="setViewMode('6a')">6A. Dot Separator</button>
+        <button class="segmented-btn" id="btn-view-6b" onclick="setViewMode('6b')">6B. Dash Separator</button>
+        <button class="segmented-btn" id="btn-view-6c" onclick="setViewMode('6c')">6C. Parenthetical</button>
+        <button class="segmented-btn" id="btn-view-6d" onclick="setViewMode('6d')">6D. Subtle Tag</button>
+      </div>
+    </div>
+
+    <!-- Controls Strip -->
+    <div class="controls-strip">
+      <div class="state-toggle-group">
+        <span class="state-label">Simulate Scenario:</span>
+        <div class="segmented-control">
+          <button class="segmented-btn active" id="state-btn-short" onclick="setStateMode('short')">
+            Standard Commentary
+          </button>
+          <button class="segmented-btn" id="state-btn-long" onclick="setStateMode('long')">
+            Longer Commentary
+          </button>
+          <button class="segmented-btn" id="state-btn-thinking" onclick="setStateMode('thinking')">
+            With &lt;think&gt; Drawer
+          </button>
+          <button class="segmented-btn" id="state-btn-lock" onclick="setStateMode('lock')">
+            Fair-Play Live Lock
+          </button>
+        </div>
+      </div>
+      <div style="font-size: 11px; color: #64748b;">
+        Hover over the thumbs and "Longer" to test the exact micro-interactions
+      </div>
+    </div>
+  </div>
+
+  <!-- The 4 Layer-6 Refinement Prototypes Stage -->
+  <div class="prototype-stage" id="prototype-stage">
+
+    <!-- ====================================================================
+         VARIATION 6A: DOT SEPARATOR (24... Nd4 · Blunder)
+         ==================================================================== -->
+    <div class="direction-wrapper" id="wrapper-6a">
+      <div class="direction-header-card">
+        <span class="dir-number" style="color: #34d399;">Variation 6A</span>
+        <h2 class="dir-name">Dot Separator</h2>
+        <p class="dir-philosophy">"24... Nd4 · Blunder" with pure red text (no background box), solid 1.5px slate square underline</p>
+      </div>
+
+      <div class="sidepanel-frame">
+        <div class="browser-panel-bar">
+          <div class="browser-dots">
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+          </div>
+          <span>Second</span>
+          <span>⚙</span>
+        </div>
+
+        <div class="prose-scroll-container">
+          <!-- Top Header: Clean pure typography -->
+          <div class="panel-header-clean">
+            <div class="panel-move-title">
+              <span>24... Nd4</span>
+              <span style="color: rgba(255,255,255,0.25);">·</span>
+              <span class="verdict-text-blunder">Blunder</span>
+            </div>
+            <span class="panel-model-label">Second 2B</span>
+          </div>
+
+          <!-- STATE: STANDARD -->
+          <div class="state-view state-short-view" style="display: flex; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative. 
+              <br><br>
+              While jumping into the center appears active, it abandons the defense of the <span class="tok-square-solid">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-solid">a8</span>.
+            </div>
+
+            <!-- EXACT RESTORED 4B FLOATING ISLAND -->
+            <div class="island-dock-restored">
+              <button class="btn-longer-action" onclick="simulateLonger()">Longer</button>
+              <div class="vote-pair-group">
+                <button class="btn-bare-thumb thumb-up" title="Helpful" aria-label="Helpful">
+                  <svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                </button>
+                <button class="btn-bare-thumb thumb-down" title="Unhelpful" aria-label="Unhelpful">
+                  <svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE: LONGER -->
+          <div class="state-view state-long-view" style="display: none; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative. 
+              <br><br>
+              While jumping into the center appears active, it abandons the defense of the <span class="tok-square-solid">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-solid">a8</span>.
+              <br><br>
+              After <span class="tok-move">25... exd5</span> <span class="tok-move">26. Qxd5+</span> <span class="tok-square-solid">Kh8</span> <span class="tok-move">27. Qxa8</span>, White emerges up a full exchange. Black needed patient piece development with <span class="tok-move">24... Be7</span> to safeguard the position.
+            </div>
+
+            <div class="island-dock-restored">
+              <span style="font-size: 11px; color: #8e8a83; font-family: 'Geist', sans-serif;">Longer commentary</span>
+              <div class="vote-pair-group">
+                <button class="btn-bare-thumb thumb-up"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+                <button class="btn-bare-thumb thumb-down"><svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE: THINKING -->
+          <div class="state-view state-thinking-view" style="display: none; flex-direction: column; flex: 1;">
+            <div style="background: rgba(207, 161, 93, 0.05); border: 1px solid rgba(207, 161, 93, 0.2); border-radius: 6px; padding: 8px 10px; font-family: 'Geist Mono', monospace; font-size: 11px; color: #8e8a83; margin-bottom: 10px;">
+              <span style="color: #cfa15d; font-weight: 600;">&lt;think&gt;</span> Evaluating 24... Nd4. Knight vacates f7 guard. 25. Bxd5! bishop sacrifice wins decisive exchange. <span style="color: #cfa15d; font-weight: 600;">&lt;/think&gt;</span>
+            </div>
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative.
+            </div>
+          </div>
+
+          <!-- STATE: LOCK -->
+          <div class="state-view state-lock-view" style="display: none; flex-direction: column; justify-content: center; flex: 1; text-align: center;">
+            <div style="font-size: 20px; margin-bottom: 6px;">🔒</div>
+            <div style="font-size: 13.5px; font-weight: 600; color: #ff9d9d;">Fair-Play Lock Active</div>
+            <p style="font-size: 12px; color: #8e8a83; margin-top: 6px; line-height: 1.5;">
+              Second is off during live games. Commentary unlocks after the game ends.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         VARIATION 6B: DASH SEPARATOR (24... Nd4 — Blunder)
+         ==================================================================== -->
+    <div class="direction-wrapper" id="wrapper-6b">
+      <div class="direction-header-card">
+        <span class="dir-number" style="color: #38bdf8;">Variation 6B</span>
+        <h2 class="dir-name">Em-Dash Separator</h2>
+        <p class="dir-philosophy">"24... Nd4 — Blunder" literary em-dash, dashed 1.5px slate square underline</p>
+      </div>
+
+      <div class="sidepanel-frame">
+        <div class="browser-panel-bar">
+          <div class="browser-dots">
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+          </div>
+          <span>Second</span>
+          <span>⚙</span>
+        </div>
+
+        <div class="prose-scroll-container">
+          <div class="panel-header-clean">
+            <div class="panel-move-title">
+              <span>24... Nd4</span>
+              <span style="color: rgba(255,255,255,0.2);">—</span>
+              <span class="verdict-text-blunder">Blunder</span>
+            </div>
+            <span class="panel-model-label">Second 2B</span>
+          </div>
+
+          <!-- STATE: STANDARD -->
+          <div class="state-view state-short-view" style="display: flex; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative. 
+              <br><br>
+              While jumping into the center appears active, it abandons the defense of the <span class="tok-square-dashed">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-dashed">a8</span>.
+            </div>
+
+            <div class="island-dock-restored">
+              <button class="btn-longer-action" onclick="simulateLonger()">Longer</button>
+              <div class="vote-pair-group">
+                <button class="btn-bare-thumb thumb-up"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+                <button class="btn-bare-thumb thumb-down"><svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE: LONGER -->
+          <div class="state-view state-long-view" style="display: none; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake. White plays <span class="tok-move">25. Bxd5!</span> winning the exchange.
+            </div>
+          </div>
+
+          <!-- STATE: THINKING -->
+          <div class="state-view state-thinking-view" style="display: none; flex-direction: column; flex: 1;">
+            <div style="color: #8e8a83;">Thinking active...</div>
+          </div>
+
+          <!-- STATE: LOCK -->
+          <div class="state-view state-lock-view" style="display: none; flex-direction: column; justify-content: center; flex: 1; text-align: center;">
+            <div style="font-size: 13.5px; font-weight: 600; color: #ff9d9d;">Fair-Play Active</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         VARIATION 6C: PARENTHETICAL VERDICT (24... Nd4 (Blunder))
+         ==================================================================== -->
+    <div class="direction-wrapper" id="wrapper-6c">
+      <div class="direction-header-card">
+        <span class="dir-number" style="color: #a78bfa;">Variation 6C</span>
+        <h2 class="dir-name">Parenthetical Verdict</h2>
+        <p class="dir-philosophy">"24... Nd4 (Blunder)" subtle parenthetical, solid 1.5px slate square underline</p>
+      </div>
+
+      <div class="sidepanel-frame">
+        <div class="browser-panel-bar">
+          <div class="browser-dots">
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+          </div>
+          <span>Second</span>
+          <span>⚙</span>
+        </div>
+
+        <div class="prose-scroll-container">
+          <div class="panel-header-clean">
+            <div class="panel-move-title">
+              <span>24... Nd4</span>
+              <span class="verdict-text-blunder" style="font-weight: 500;">(Blunder)</span>
+            </div>
+            <span class="panel-model-label">Second 0.8B</span>
+          </div>
+
+          <!-- STATE: STANDARD -->
+          <div class="state-view state-short-view" style="display: flex; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative. 
+              <br><br>
+              While jumping into the center appears active, it abandons the defense of the <span class="tok-square-solid">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-solid">a8</span>.
+            </div>
+
+            <div class="island-dock-restored">
+              <button class="btn-longer-action" onclick="simulateLonger()">Longer</button>
+              <div class="vote-pair-group">
+                <button class="btn-bare-thumb thumb-up"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+                <button class="btn-bare-thumb thumb-down"><svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE: LONGER -->
+          <div class="state-view state-long-view" style="display: none; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake. White plays <span class="tok-move">25. Bxd5!</span> winning the exchange.
+            </div>
+          </div>
+
+          <!-- STATE: THINKING -->
+          <div class="state-view state-thinking-view" style="display: none; flex-direction: column; flex: 1;">
+            <div style="color: #8e8a83;">Thinking active...</div>
+          </div>
+
+          <!-- STATE: LOCK -->
+          <div class="state-view state-lock-view" style="display: none; flex-direction: column; justify-content: center; flex: 1; text-align: center;">
+            <div style="font-size: 13.5px; font-weight: 600; color: #ff9d9d;">Fair-Play Active</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         VARIATION 6D: SUBTLE MUTED TAG
+         ==================================================================== -->
+    <div class="direction-wrapper" id="wrapper-6d">
+      <div class="direction-header-card">
+        <span class="dir-number" style="color: #f59e0b;">Variation 6D</span>
+        <h2 class="dir-name">Quiet Small-Caps Tag</h2>
+        <p class="dir-philosophy">"24... Nd4 BLUNDER" quiet spaced uppercase without brackets, solid 1.5px slate square underline</p>
+      </div>
+
+      <div class="sidepanel-frame">
+        <div class="browser-panel-bar">
+          <div class="browser-dots">
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+            <div class="browser-dot"></div>
+          </div>
+          <span>Second</span>
+          <span>⚙</span>
+        </div>
+
+        <div class="prose-scroll-container">
+          <div class="panel-header-clean">
+            <div class="panel-move-title">
+              <span>24... Nd4</span>
+              <span class="verdict-text-blunder" style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">BLUNDER</span>
+            </div>
+            <span class="panel-model-label">Second 2B</span>
+          </div>
+
+          <!-- STATE: STANDARD -->
+          <div class="state-view state-short-view" style="display: flex; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative. 
+              <br><br>
+              While jumping into the center appears active, it abandons the defense of the <span class="tok-square-solid">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-solid">a8</span>.
+            </div>
+
+            <div class="island-dock-restored">
+              <button class="btn-longer-action" onclick="simulateLonger()">Longer</button>
+              <div class="vote-pair-group">
+                <button class="btn-bare-thumb thumb-up"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+                <button class="btn-bare-thumb thumb-down"><svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE: LONGER -->
+          <div class="state-view state-long-view" style="display: none; flex-direction: column; flex: 1;">
+            <div class="commentary-body">
+              Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake. White plays <span class="tok-move">25. Bxd5!</span> winning the exchange.
+            </div>
+          </div>
+
+          <!-- STATE: THINKING -->
+          <div class="state-view state-thinking-view" style="display: none; flex-direction: column; flex: 1;">
+            <div style="color: #8e8a83;">Thinking active...</div>
+          </div>
+
+          <!-- STATE: LOCK -->
+          <div class="state-view state-lock-view" style="display: none; flex-direction: column; justify-content: center; flex: 1; text-align: center;">
+            <div style="font-size: 13.5px; font-weight: 600; color: #ff9d9d;">Fair-Play Active</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Ultra-Low Friction Feedback Dock -->
+  <div class="feedback-dock">
+    <div class="feedback-dock-header">
+      <div class="feedback-dock-title">
+        <span>💬</span>
+        <span>Low-Friction Feedback Helper</span>
+      </div>
+      <span style="font-size: 12px; color: #64748b;">
+        Click tags below or type your thoughts, then copy with one click.
+      </span>
+    </div>
+
+    <!-- Quick Clickable Feedback Chips -->
+    <div class="feedback-chips">
+      <div class="feedback-chip" onclick="toggleFeedbackChip(this, 'Variation 6A is the winner: \"24... Nd4 · Blunder\" with dot separator and pure red text fits the aesthetic perfectly.')">
+        🏆 Winner: 6A (Dot Separator)
+      </div>
+      <div class="feedback-chip" onclick="toggleFeedbackChip(this, 'Variation 6B is the winner: \"24... Nd4 — Blunder\" with em-dash separator.')">
+        ✨ Winner: 6B (Em-Dash Separator)
+      </div>
+      <div class="feedback-chip" onclick="toggleFeedbackChip(this, 'Variation 6C is the winner: \"24... Nd4 (Blunder)\" parenthetical.')">
+        ✨ Winner: 6C (Parenthetical)
+      </div>
+      <div class="feedback-chip" onclick="toggleFeedbackChip(this, 'The bottom bar now looks 100% right: exact restored capsule, naked green/red outline thumbs with neutral hover square, ghost Longer button.')">
+        🎯 Bottom bar is now 100% nailed
+      </div>
+      <div class="feedback-chip" onclick="toggleFeedbackChip(this, 'The pronounced 5B slate square underline (#cbd5e1) is gorgeous and perfectly balanced.')">
+        🪨 Square underline is now perfect
+      </div>
+    </div>
+
+    <!-- Input & Copy Actions -->
+    <div class="feedback-action-row">
+      <input type="text" id="feedback-custom-input" class="feedback-input" 
+        placeholder="Add your own notes (or leave blank to use selected chips above)...">
+      <button class="feedback-copy-btn" onclick="copyFeedbackToClipboard()">
+        <span>📋</span>
+        <span id="copy-btn-label">Copy Feedback for Antigravity</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    function setViewMode(mode) {
+      const stage = document.getElementById('prototype-stage');
+      const wrappers = [
+        document.getElementById('wrapper-6a'),
+        document.getElementById('wrapper-6b'),
+        document.getElementById('wrapper-6c'),
+        document.getElementById('wrapper-6d')
+      ];
+      
+      document.querySelectorAll('.segmented-control button').forEach(b => {
+        if (b.id && b.id.startsWith('btn-view-')) b.classList.remove('active');
+      });
+
+      if (mode === 'grid') {
+        document.getElementById('btn-view-grid').classList.add('active');
+        stage.classList.remove('single-view');
+        wrappers.forEach(w => w.style.display = 'flex');
+      } else {
+        document.getElementById('btn-view-' + mode).classList.add('active');
+        stage.classList.add('single-view');
+        wrappers.forEach(w => w.style.display = 'none');
+        document.getElementById('wrapper-' + mode).style.display = 'flex';
+      }
+    }
+
+    function setStateMode(state) {
+      const stateButtons = {
+        'short': document.getElementById('state-btn-short'),
+        'long': document.getElementById('state-btn-long'),
+        'thinking': document.getElementById('state-btn-thinking'),
+        'lock': document.getElementById('state-btn-lock')
+      };
+
+      Object.values(stateButtons).forEach(btn => btn.classList.remove('active'));
+      if (stateButtons[state]) stateButtons[state].classList.add('active');
+
+      document.querySelectorAll('.state-view').forEach(el => el.style.display = 'none');
+
+      document.querySelectorAll('.state-' + state + '-view').forEach(el => {
+        el.style.display = 'flex';
+      });
+    }
+
+    function simulateLonger() {
+      setStateMode('long');
+    }
+
+    let selectedFeedbackChips = new Set();
+    function toggleFeedbackChip(el, text) {
+      if (selectedFeedbackChips.has(text)) {
+        selectedFeedbackChips.delete(text);
+        el.classList.remove('selected');
+      } else {
+        selectedFeedbackChips.add(text);
+        el.classList.add('selected');
+      }
+    }
+
+    function copyFeedbackToClipboard() {
+      const customInput = document.getElementById('feedback-custom-input').value.trim();
+      const chipsArray = Array.from(selectedFeedbackChips);
+
+      let message = "Here is my feedback on Layer 6:\n";
+      if (chipsArray.length > 0) {
+        message += "\nKey impressions:\n- " + chipsArray.join("\n- ");
+      }
+      if (customInput) {
+        message += "\n\nAdditional notes:\n" + customInput;
+      }
+      if (chipsArray.length === 0 && !customInput) {
+        message = "I have reviewed Layer 6. Here are my thoughts:";
+      }
+
+      navigator.clipboard.writeText(message).then(() => {
+        const btn = document.getElementById('copy-btn-label');
+        const orig = btn.textContent;
+        btn.textContent = "Copied to Clipboard!";
+        setTimeout(() => { btn.textContent = orig; }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

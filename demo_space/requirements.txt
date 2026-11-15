@@ -1,0 +1,4 @@
+gradio>=5.16.0
+python-chess>=1.10.0
+huggingface-hub>=0.25.0
+llama-cpp-python>=0.3.8

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  :root {
+    --font-sans: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: #e2e8f0;
+    line-height: 1.5;
+    padding: 4px;
+    background: transparent;
+  }
+
+  .grid-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    max-width: 440px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .variant-card {
+    background: #121316;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  }
+
+  .variant-meta-bar {
+    padding: 9px 14px;
+    background: #171920;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .variant-tag {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .panel-body-wrap {
+    padding: 18px 18px 84px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    min-height: 310px;
+  }
+
+  /* 6A: Pure typographic header with center alignment */
+  .panel-header-clean {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .panel-move-title {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    line-height: 1;
+  }
+
+  .verdict-blunder {
+    color: #f87171;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .panel-model-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #8e8a83;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  /* High-legibility modern sans commentary (restored from 5B) */
+  .commentary-text {
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.68;
+    color: #e2e8f0;
+    letter-spacing: -0.01em;
+  }
+
+  .tok-piece {
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .tok-move {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #e5c07b;
+    border-bottom: 1px dashed rgba(229, 192, 123, 0.6);
+    padding: 0 1px;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .tok-move:hover {
+    color: #ffd88b;
+    border-bottom-style: solid;
+  }
+
+  .tok-square-solid {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: #cbd5e1;
+    border-bottom: 1.5px solid rgba(203, 213, 225, 0.7);
+    padding: 0 1px;
+  }
+
+  /* Slightly bigger floating island dock with generous margins */
+  .island-dock {
+    position: absolute;
+    bottom: 14px;
+    left: 16px;
+    right: 16px;
+    background: rgba(22, 24, 30, 0.90);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 11px;
+    padding: 9px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Slightly bigger "Longer" button */
+  .btn-longer {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #f1ebd9;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    line-height: 1;
+  }
+  .btn-longer:hover {
+    background: #252834;
+    border-color: #363b4c;
+    color: #ffffff;
+  }
+
+  .vote-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Slightly bigger bare outline thumbs (32x32px with 17px SVG) */
+  .btn-thumb {
+    background: transparent;
+    border: 1px solid transparent;
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.18s ease, border-color 0.18s ease;
+  }
+  .btn-thumb svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .btn-thumb.up svg {
+    stroke: #34d399;
+  }
+  .btn-thumb.down svg {
+    stroke: #f87171;
+  }
+
+  /* Hover: subtle non-colored square pops up smoothly */
+  .btn-thumb:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-container">
+
+  <!-- 6A: Final Refined Specification -->
+  <div class="variant-card">
+    <div class="variant-meta-bar">
+      <span class="variant-tag" style="color: #34d399;">Variation 6A (Chosen Design)</span>
+      <span style="color: #94a3b8; font-size: 11px;">Center-Aligned Header</span>
+    </div>
+    <div class="panel-body-wrap">
+      <div class="panel-header-clean">
+        <div class="panel-move-title">
+          <span>24... Nd4</span>
+          <span style="color: rgba(255,255,255,0.25); line-height: 1;">·</span>
+          <span class="verdict-blunder">Blunder</span>
+        </div>
+        <span class="panel-model-label">Second 2B</span>
+      </div>
+      <div class="commentary-text">
+        Moving the <span class="tok-piece">knight</span> to <span class="tok-move">24... Nd4</span> is a critical tactical mistake that surrenders the initiative.
+        <br><br>
+        While jumping into the center appears active, it abandons the defense of the <span class="tok-square-solid">f7</span> square. White refutes this immediately with <span class="tok-move">25. Bxd5!</span>, unleashing an unstoppable double attack against the black <span class="tok-piece">king</span> and the undefended <span class="tok-piece">rook</span> on <span class="tok-square-solid">a8</span>.
+      </div>
+      <div class="island-dock">
+        <button class="btn-longer">Longer</button>
+        <div class="vote-group">
+          <button class="btn-thumb up" title="Helpful" aria-label="Helpful">
+            <svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+          </button>
+          <button class="btn-thumb down" title="Unhelpful" aria-label="Unhelpful">
+            <svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

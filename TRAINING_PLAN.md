@@ -508,10 +508,10 @@ All Stage T3, T4, and T6 runs are logged in [`eval/results/experiment_ledger.jso
    - Base Model: `Qwen/Qwen3.5-2B`
    - Winning SFT v2 Adapter (`SFT-A1`): `/content/drive/MyDrive/second/checkpoints/sft_v2_a1/final_adapter`
    - **Winning GRPO v2 Release Adapter (`RL-B2`)**: `/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter`
-   - Note on Merging for Phase 8: Notice that `RL-B2` loaded `SFT-A1` via `PeftModel.from_pretrained(base_model, sft_adapter_dir, is_trainable=True)` and trained that adapter in-place with GRPO. Therefore, `/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter` is a **single self-contained LoRA adapter (`r=32`, `alpha=64`)** on top of `Qwen/Qwen3.5-2B`. In Phase 8, load `Qwen/Qwen3.5-2B` in `bfloat16`, load `PeftModel.from_pretrained(base_model, "/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter")`, call `merge_and_unload()`, and convert to **GGUF `Q4_K_M`** via `llama.cpp` for `wllama` (`docs/decisions/runtime.md`).
+   - Note on Merging for Phase 8: Notice that `RL-B2` loaded `SFT-A1` via `PeftModel.from_pretrained(base_model, sft_adapter_dir, is_trainable=True)` and trained that adapter in-place with GRPO. Therefore, `/content/drive/MyDrive/second/checkpoints/grpo_v2_b2/final_adapter` is a **single self-contained LoRA adapter (`r=32`, `alpha=64`)** on top of `Qwen/Qwen3.5-2B`. Phase 8 export tools are implemented in `export/` (`merge_lora.py`, `convert_gguf.py`, `quality_check.py`, `publish_hf.py`, `export_browser.ipynb`), converting to **GGUF `Q4_K_M`** with `< 500 MB` shards for `wllama` (`docs/decisions/runtime.md`), passing the `2.00%` hard-fail post-quantization release gate (`<= 6.70%`).
 2. **Colab PEFT + TorchAO Compatibility Workaround**:
    - On Google Colab, always uninstall `torchao` and `torchvision` (`!pip uninstall -y -q torchao torchvision`) and set `peft.import_utils.is_torchao_available = lambda: False` before importing/loading `PeftModel`.
 3. **Local Virtual Environment & Disk Space**:
-   - Always run Python and Pytest using `.venv/bin/python` and `.venv/bin/pytest` in `/home/joebos/programming/Second` (`454` tests passing).
+   - Always run Python and Pytest using `.venv/bin/python` and `.venv/bin/pytest` in `/home/joebos/programming/Second` (`465` tests passing).
    - Keep disk usage clean: do not leave multi-gigabyte duplicate zip bundles or uncompressed model weights in `/home/joebos/Downloads` or `spikes/`.
 

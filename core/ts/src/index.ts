@@ -6,12 +6,15 @@
 
 export { OPENING_BOOK, lookupOpening } from "./openings.js";
 
-export {
+export type {
   EngineScore,
   EnginePv,
   EngineEval,
   Verdict,
   LegalMoveInfo,
+} from "./facts.js";
+
+export {
   PIECE_VALUES,
   getLegalMoves,
   scoreToWhiteCp,
@@ -39,9 +42,10 @@ export {
   extractFacts,
 } from "./facts.js";
 
+export type { ChatMessage } from "./prompt.js";
+
 export {
   SYSTEM_MESSAGE,
-  ChatMessage,
   buildUserMessage,
   buildPromptMessages,
   formatQwenChatPrompt,
