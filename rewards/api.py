@@ -257,6 +257,34 @@ def _extract_content(item: Any, role_target: str) -> str:
     return str(item)
 
 
+def _score_batch(
+    prompts: list[Any],
+    completions: list[Any],
+    default_reward_version: str,
+    extractor: Any,
+    fn_name: str,
+    fallback_value: float,
+    kwargs: dict[str, Any],
+) -> list[float]:
+    """Score a batch of prompt/completion pairs with a stream extractor."""
+    reward_version = str(kwargs.get("reward_version", default_reward_version))
+    rewards: list[float] = []
+    for prompt_item, completion_item in zip(prompts, completions):
+        try:
+            prompt_str = _extract_content(prompt_item, role_target="user")
+            completion_str = _extract_content(
+                completion_item, role_target="assistant"
+            )
+            result = score_completion(
+                prompt_str, completion_str, reward_version=reward_version
+            )
+            rewards.append(float(extractor(result)))
+        except Exception as exc:
+            logger.warning("Failed to score sample in %s: %s", fn_name, exc)
+            rewards.append(fallback_value)
+    return rewards
+
+
 def grpo_reward_fn(
     prompts: list[Any],
     completions: list[Any],
@@ -269,24 +297,15 @@ def grpo_reward_fn(
     If evaluation of one sample fails, log a warning and return negative one.
     Return a list of scalar rewards.
     """
-    reward_version = str(kwargs.get("reward_version", "v1"))
-    rewards: list[float] = []
-
-    for prompt_item, completion_item in zip(prompts, completions):
-        try:
-            prompt_str = _extract_content(prompt_item, role_target="user")
-            completion_str = _extract_content(
-                completion_item, role_target="assistant"
-            )
-            result = score_completion(
-                prompt_str, completion_str, reward_version=reward_version
-            )
-            rewards.append(result.reward)
-        except Exception as exc:
-            logger.warning("Failed to score sample in grpo_reward_fn: %s", exc)
-            rewards.append(-1.0)
-
-    return rewards
+    return _score_batch(
+        prompts,
+        completions,
+        default_reward_version="v1",
+        extractor=lambda result: result.reward,
+        fn_name="grpo_reward_fn",
+        fallback_value=-1.0,
+        kwargs=kwargs,
+    )
 
 
 def reward_grounding_fn(
@@ -299,24 +318,15 @@ def reward_grounding_fn(
     Return 0.0 when all hard checks pass.
     Return graded negative penalty when any hard check fails.
     """
-    rewards: list[float] = []
-    for prompt_item, completion_item in zip(prompts, completions):
-        try:
-            prompt_str = _extract_content(prompt_item, role_target="user")
-            completion_str = _extract_content(
-                completion_item, role_target="assistant"
-            )
-            result = score_completion(
-                prompt_str, completion_str, reward_version="v2"
-            )
-            if result.passed_all_hard:
-                rewards.append(0.0)
-            else:
-                rewards.append(float(result.reward))
-        except Exception as exc:
-            logger.warning("Failed to score sample in reward_grounding_fn: %s", exc)
-            rewards.append(-1.0)
-    return rewards
+    return _score_batch(
+        prompts,
+        completions,
+        default_reward_version="v2",
+        extractor=lambda result: 0.0 if result.passed_all_hard else result.reward,
+        fn_name="reward_grounding_fn",
+        fallback_value=-1.0,
+        kwargs=kwargs,
+    )
 
 
 def reward_pedagogy_fn(
@@ -331,28 +341,24 @@ def reward_pedagogy_fn(
     """
     from .scorer import V2_WEIGHT_BETTER_MOVE, V2_WEIGHT_KEY_POINT
 
-    rewards: list[float] = []
-    for prompt_item, completion_item in zip(prompts, completions):
-        try:
-            prompt_str = _extract_content(prompt_item, role_target="user")
-            completion_str = _extract_content(
-                completion_item, role_target="assistant"
-            )
-            result = score_completion(
-                prompt_str, completion_str, reward_version="v2"
-            )
-            if not result.passed_all_hard:
-                rewards.append(0.0)
-            else:
-                kp = result.soft_scores.get("key_point", 0.0)
-                bm = result.soft_scores.get("better_move", 0.0)
-                m_len = result.soft_scores.get("length_multiplier", 1.0)
-                ped_score = (V2_WEIGHT_KEY_POINT * kp + V2_WEIGHT_BETTER_MOVE * bm) * m_len
-                rewards.append(round(float(ped_score), 4))
-        except Exception as exc:
-            logger.warning("Failed to score sample in reward_pedagogy_fn: %s", exc)
-            rewards.append(0.0)
-    return rewards
+    def _extract_ped(result: RewardResult) -> float:
+        if not result.passed_all_hard:
+            return 0.0
+        kp = result.soft_scores.get("key_point", 0.0)
+        bm = result.soft_scores.get("better_move", 0.0)
+        m_len = result.soft_scores.get("length_multiplier", 1.0)
+        ped_score = (V2_WEIGHT_KEY_POINT * kp + V2_WEIGHT_BETTER_MOVE * bm) * m_len
+        return round(float(ped_score), 4)
+
+    return _score_batch(
+        prompts,
+        completions,
+        default_reward_version="v2",
+        extractor=_extract_ped,
+        fn_name="reward_pedagogy_fn",
+        fallback_value=0.0,
+        kwargs=kwargs,
+    )
 
 
 def reward_style_fn(
@@ -371,33 +377,29 @@ def reward_style_fn(
         V2_WEIGHT_NOT_COPIED,
     )
 
-    rewards: list[float] = []
-    for prompt_item, completion_item in zip(prompts, completions):
-        try:
-            prompt_str = _extract_content(prompt_item, role_target="user")
-            completion_str = _extract_content(
-                completion_item, role_target="assistant"
-            )
-            result = score_completion(
-                prompt_str, completion_str, reward_version="v2"
-            )
-            if not result.passed_all_hard:
-                rewards.append(0.0)
-            else:
-                lf = result.soft_scores.get("level_fit", 0.0)
-                nc = result.soft_scores.get("not_copied", 0.0)
-                nr = result.soft_scores.get("no_repeats", 0.0)
-                m_len = result.soft_scores.get("length_multiplier", 1.0)
-                style_score = (
-                    V2_WEIGHT_LEVEL_FIT * lf
-                    + V2_WEIGHT_NOT_COPIED * nc
-                    + V2_WEIGHT_NO_REPEATS * nr
-                ) * m_len
-                rewards.append(round(float(style_score), 4))
-        except Exception as exc:
-            logger.warning("Failed to score sample in reward_style_fn: %s", exc)
-            rewards.append(0.0)
-    return rewards
+    def _extract_style(result: RewardResult) -> float:
+        if not result.passed_all_hard:
+            return 0.0
+        lf = result.soft_scores.get("level_fit", 0.0)
+        nc = result.soft_scores.get("not_copied", 0.0)
+        nr = result.soft_scores.get("no_repeats", 0.0)
+        m_len = result.soft_scores.get("length_multiplier", 1.0)
+        style_score = (
+            V2_WEIGHT_LEVEL_FIT * lf
+            + V2_WEIGHT_NOT_COPIED * nc
+            + V2_WEIGHT_NO_REPEATS * nr
+        ) * m_len
+        return round(float(style_score), 4)
+
+    return _score_batch(
+        prompts,
+        completions,
+        default_reward_version="v2",
+        extractor=_extract_style,
+        fn_name="reward_style_fn",
+        fallback_value=0.0,
+        kwargs=kwargs,
+    )
 
 
 

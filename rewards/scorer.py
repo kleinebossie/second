@@ -21,7 +21,9 @@ from .checks import (
     check_legal_moves,
     check_opening_claims,
     check_piece_on_square,
+    check_positional_fact_grounding,
     check_relational_claims,
+    check_vague_boilerplate,
     check_verdict_tone,
     is_bad_verdict,
     strip_san_suffix,
@@ -89,6 +91,8 @@ STYLE_FORMAT_CHECKS: Final[frozenset[str]] = frozenset({
     "coach_voice",
     "beginner_jargon",
     "format",
+    "vague_boilerplate",
+    "positional_grounding",
 })
 
 
@@ -758,7 +762,8 @@ def compute_reward(
 
     Evaluate all hard rule checks first.
     When reward_version is v1, assign -1.0 on any hard check failure and use additive weights.
-    When reward_version is v2, apply graded hard penalties and multiplicative length scaling.
+    When reward_version is v2 or v3, apply graded hard penalties and length scaling.
+    When reward_version is v3, enforce boilerplate and positional grounding checks.
     """
     resolved_best_san = best_move_san or _extract_prompt_field(prompt_text, "Best move:")
 
@@ -811,7 +816,7 @@ def compute_reward(
         ),
     }
 
-    if reward_version == "v2":
+    if reward_version in ("v2", "v3"):
         hard_results["coach_voice"] = check_coach_voice(text=text)
         hard_results["opening_claims"] = check_opening_claims(text=text, facts=facts)
         hard_results["relational_claims"] = check_relational_claims(
@@ -819,6 +824,16 @@ def compute_reward(
             fen=fen,
             move_uci=move_uci,
             facts=facts,
+        )
+    if reward_version == "v3":
+        hard_results["vague_boilerplate"] = check_vague_boilerplate(
+            text=text,
+            facts=facts,
+        )
+        hard_results["positional_grounding"] = check_positional_fact_grounding(
+            text=text,
+            facts=facts,
+            verdict=verdict,
         )
 
     passed_all_hard = all(res.passed for res in hard_results.values())
@@ -851,7 +866,7 @@ def compute_reward(
         "no_repeats": score_no_repeats(text=text),
     }
 
-    if reward_version == "v2":
+    if reward_version in ("v2", "v3"):
         length_mult = compute_length_multiplier(text=text, detail=detail)
         soft_results["length_multiplier"] = length_mult
         if not passed_all_hard:

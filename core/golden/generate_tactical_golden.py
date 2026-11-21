@@ -152,7 +152,7 @@ def build_tactical_cases() -> list[dict[str, Any]]:
                 "pvs": [{"score": {"type": "cp", "value": 250}, "moves": ["a1d1", "d8e7"]}],
             },
             "eval_after": {
-                "fen": "3qk3/8/8/3b4/8/8/8/3RK3 b Q - 1 1",
+                "fen": "3qk3/8/8/3b4/8/8/8/3RK3 b - - 1 1",
                 "pvs": [{"score": {"type": "cp", "value": 250}, "moves": ["d8e7", "e1f2"]}],
             },
             "motif_tag": "pin_relative_rook_queen",
@@ -426,7 +426,7 @@ def build_tactical_cases() -> list[dict[str, Any]]:
                 "pvs": [{"score": {"type": "cp", "value": 0}, "moves": ["b1d2", "e4f3"]}],
             },
             "eval_after": {
-                "fen": "r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NP1/PPP2P1P/RNB1KB1R b KQkq - 0 4",
+                "fen": "r1bqkb1r/pppp1ppp/2n5/8/3Pp3/5NPP/PPP2P2/RNB1KB1R b KQkq - 0 4",
                 "pvs": [{"score": {"type": "cp", "value": -250}, "moves": ["e4f3"]}],
             },
             "motif_tag": "refutation_defends_knight",

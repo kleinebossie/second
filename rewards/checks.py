@@ -111,7 +111,9 @@ class CheckResult:
 from .claims import (
     check_coach_voice,
     check_opening_claims,
+    check_positional_fact_grounding,
     check_relational_claims,
+    check_vague_boilerplate,
 )
 
 

@@ -11,6 +11,7 @@ from typing import Any
 import chess
 
 from .facts import (
+    _is_king_takes_friendly_rook,
     classify_verdict,
     extract_facts,
     round_pct,
@@ -32,6 +33,7 @@ def build_user_message(
     eval_before: dict[str, Any],
     eval_after: dict[str, Any] | None = None,
     move_uci: str | None = None,
+    facts: list[str] | None = None,
 ) -> str:
     """Build the user message string for the model prompt.
 
@@ -60,19 +62,25 @@ def build_user_message(
         best_line_sans = uci_line_to_san(fen, best_moves_uci, max_plies=6)
         best_line_san = " ".join(best_line_sans)
 
-    facts = extract_facts(
-        task=task,
-        fen=fen,
-        eval_before=eval_before,
-        eval_after=eval_after,
-        move_uci=move_uci,
+    resolved_facts = (
+        facts
+        if facts is not None
+        else extract_facts(
+            task=task,
+            fen=fen,
+            eval_before=eval_before,
+            eval_after=eval_after,
+            move_uci=move_uci,
+        )
     )
-    facts_lines = [f"- {f}" for f in facts]
+    facts_lines = [f"- {f}" for f in resolved_facts]
 
     if task == "explain_move":
         if not move_uci:
             raise ValueError("move_uci is required for task explain_move")
         move_obj = chess.Move.from_uci(move_uci)
+        if _is_king_takes_friendly_rook(board, move_obj) or move_obj not in board.legal_moves:
+            raise ValueError(f"Illegal move_uci: {move_uci}")
         move_san = board.san(move_obj)
         verdict = classify_verdict(eval_before, eval_after, move_uci)
 
@@ -160,3 +168,48 @@ def format_qwen_chat_prompt(
         f"<|im_start|>user\n{user_message}<|im_end|>\n"
         f"<|im_start|>assistant\n<think>\n\n</think>\n\n"
     )
+
+
+def rebuild_v1_1_record(rec: dict[str, Any]) -> dict[str, Any]:
+    """Recompute move_san, verdict, facts, user_message, and chat_prompt for a record."""
+    updated = dict(rec)
+    fen = str(updated["fen"])
+    task = str(updated.get("task", "explain_move"))
+    level = str(updated.get("level", "club"))
+    detail = str(updated.get("detail", "short"))
+    eval_before = updated["eval_before"]
+    eval_after = updated.get("eval_after")
+    move_uci = updated.get("move_uci")
+
+    board = chess.Board(fen)
+    if task == "explain_move" and move_uci:
+        move_obj = chess.Move.from_uci(str(move_uci))
+        if _is_king_takes_friendly_rook(board, move_obj) or move_obj not in board.legal_moves:
+            raise ValueError(f"Illegal move_uci: {move_uci}")
+        updated["move_san"] = board.san(move_obj)
+        updated["verdict"] = classify_verdict(eval_before, eval_after, str(move_uci))
+    else:
+        updated["move_san"] = None
+        updated["verdict"] = None
+
+    facts = extract_facts(
+        task=task,
+        fen=fen,
+        eval_before=eval_before,
+        eval_after=eval_after,
+        move_uci=str(move_uci) if move_uci else None,
+    )
+    user_msg = build_user_message(
+        task=task,
+        level=level,
+        detail=detail,
+        fen=fen,
+        eval_before=eval_before,
+        eval_after=eval_after,
+        move_uci=str(move_uci) if move_uci else None,
+        facts=facts,
+    )
+    updated["facts"] = facts
+    updated["user_message"] = user_msg
+    updated["chat_prompt"] = format_qwen_chat_prompt(user_msg)
+    return updated

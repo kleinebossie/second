@@ -14,11 +14,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Final
 
 import chess
 
 from core.python.facts import compute_phase_fact
+from rewards.claims import _has_opponent_tactical_punishment, _has_tactical_threat_fact
 
 CONCEPT_TIERS = (
     "tier_1_mechanics",
@@ -35,7 +36,9 @@ MOTIF_KEYWORDS = re.compile(
 )
 
 CALCULATION_KEYWORDS = re.compile(
-    r"\b(checkmate|mate in|forced mate|threatens mate|threatens checkmate|wins the queen|wins the rook)\b",
+    r"\b(checkmate|mate in|forced mate|threatens mate|threatens checkmate|"
+    r"wins the (?:queen|rook|bishop|knight|pawn)|wins material|wins a pawn|"
+    r"avoids losing material|avoids losing a pawn)\b",
     re.IGNORECASE,
 )
 
@@ -45,9 +48,49 @@ MECHANICS_KEYWORDS = re.compile(
 )
 
 POSITIONAL_KEYWORDS = re.compile(
-    r"\b(castling|castled|castle|king safety|develop|development|outpost|space|pawn structure)\b",
+    r"\b(castling|castled|castle|king safety|develop|development|outpost|space|pawn structure|"
+    r"centraliz\w*|tension|activity|open file|half-open|recapture|central space)\b",
     re.IGNORECASE,
 )
+
+POSITIONAL_PRIMARY_MARKERS: Final[tuple[str, ...]] = (
+    "centraliz",
+    "central space",
+    "central tension",
+    "central pawn",
+    "gains space",
+    "increases ",
+    "more active pieces",
+    "open file",
+    "half-open file",
+    "-file",
+    "develops the",
+    "castles to",
+    "challenges the center",
+    "releases central tension",
+    "central pawn tension",
+    "more central space",
+    "leads in piece development",
+)
+
+
+def _is_positional_primary(
+    facts: list[str],
+    eval_before: dict[str, Any] | None,
+    eval_after: dict[str, Any] | None,
+) -> bool:
+    """Return True when positional facts dominate and no decisive tactical motif applies."""
+    if not facts or has_motif_in_facts(facts) or has_calculation_sequence(eval_before, eval_after, facts):
+        return False
+    if _has_opponent_tactical_punishment(facts) or _has_tactical_threat_fact(facts):
+        return False
+
+    for fact in facts:
+        f_lower = fact.lower()
+        if any(p in f_lower for p in POSITIONAL_PRIMARY_MARKERS):
+            return True
+
+    return False
 
 
 def has_motif_in_facts(facts: list[str]) -> bool:
@@ -68,10 +111,10 @@ def has_board_motif(board: chess.Board, move: chess.Move | None = None) -> bool:
     """
     opp = not board.turn
 
-    # 1. Absolute pins on opponent pieces
+    # 1. Absolute pins on opponent non-pawn pieces
     for sq in chess.SQUARES:
         piece = board.piece_at(sq)
-        if piece and piece.color == opp and piece.piece_type != chess.KING:
+        if piece and piece.color == opp and piece.piece_type not in (chess.KING, chess.PAWN):
             if board.is_pinned(opp, sq):
                 return True
 
@@ -172,7 +215,11 @@ def classify_concept_tier(item: dict[str, Any]) -> str:
     if is_endgame_position(board, phase=phase):
         return "tier_5_endgame"
 
-    # 2. Tactical motifs (forks, pins, skewers, discovered attacks)
+    # 2. Positional-primary positions without explicit tactical motifs or hanging material
+    if _is_positional_primary(facts, eval_before, eval_after):
+        return "tier_4_positional"
+
+    # 3. Tactical motifs (forks, pins, skewers, discovered attacks)
     if has_motif_in_facts(facts) or has_board_motif(board, move=move):
         return "tier_2_motifs"
 
@@ -183,10 +230,17 @@ def classify_concept_tier(item: dict[str, Any]) -> str:
     # 4. Mechanics: checks, direct captures, hanging pieces
     has_mechanics = False
     for fact in facts:
+        if " can capture the " in fact.lower():
+            continue
         if MECHANICS_KEYWORDS.search(fact):
             has_mechanics = True
             break
-    if has_mechanics or board.is_check():
+    if (
+        has_mechanics
+        or board.is_check()
+        or _has_tactical_threat_fact(facts)
+        or _has_opponent_tactical_punishment(facts)
+    ):
         return "tier_1_mechanics"
 
     # 5. Positional

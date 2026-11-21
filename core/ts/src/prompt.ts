@@ -7,11 +7,13 @@
 import { Chess } from "chessops";
 import { parseFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
+import { isNormal } from "chessops/types";
 import { parseUci } from "chessops/util";
 import {
   classifyVerdict,
   EngineEval,
   extractFacts,
+  isKingTakesFriendlyRook,
   roundPct,
   uciLineToSan,
   winChanceSide,
@@ -39,7 +41,8 @@ export function buildUserMessage(
   fen: string,
   evalBefore: EngineEval,
   evalAfter?: EngineEval | null,
-  moveUci?: string | null
+  moveUci?: string | null,
+  facts?: string[] | null
 ): string {
   const parseRes = parseFen(fen);
   if (parseRes.isErr) {
@@ -71,15 +74,16 @@ export function buildUserMessage(
     bestLineSan = bestLineSans.join(" ");
   }
 
-  const facts = extractFacts(task, fen, evalBefore, evalAfter, moveUci, pos);
-  const factsLines = facts.map((f) => `- ${f}`);
+  const resolvedFacts =
+    facts ?? extractFacts(task, fen, evalBefore, evalAfter, moveUci, pos);
+  const factsLines = resolvedFacts.map((f) => `- ${f}`);
 
   if (task === "explain_move") {
     if (!moveUci) {
       throw new Error("move_uci is required for task explain_move");
     }
     const moveObj = parseUci(moveUci);
-    if (!moveObj || !pos.isLegal(moveObj)) {
+    if (!moveObj || !isNormal(moveObj) || isKingTakesFriendlyRook(pos, moveObj) || !pos.isLegal(moveObj)) {
       throw new Error(`Invalid or illegal move_uci: ${moveUci}`);
     }
     const moveSan = makeSan(pos, moveObj);

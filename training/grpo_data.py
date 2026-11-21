@@ -16,7 +16,7 @@ from pathlib import Path
 import random
 from typing import Any
 
-from eval.metrics import clean_completion_text, count_words
+from eval.metrics import clean_completion_text
 from rewards.api import (
     _extract_content,
     _extract_user_message,
@@ -34,7 +34,7 @@ from training.sft_data import (
 logger: logging.Logger = logging.getLogger(__name__)
 
 ALLOWED_LOSS_TYPES: set[str] = {"grpo", "bnpo", "dr_grpo", "dapo"}
-ALLOWED_REWARD_VERSIONS: set[str] = {"v1", "v2"}
+ALLOWED_REWARD_VERSIONS: set[str] = {"v1", "v2", "v3"}
 ALLOWED_MULTI_OBJECTIVE_AGGREGATIONS: set[str] = {
     "sum_then_normalize",
     "normalize_then_sum",
@@ -154,7 +154,7 @@ def load_grpo_config(
         raise ValueError(
             f"Invalid beta: expected 0.0 <= beta <= 0.5, got {beta}"
         )
-    min_allowed_steps = 150 if reward_version == "v2" else 300
+    min_allowed_steps = 150 if reward_version in ("v2", "v3") else 300
     if not (isinstance(max_steps, int) and min_allowed_steps <= max_steps <= 600):
         raise ValueError(
             f"Invalid max_steps: expected {min_allowed_steps} <= max_steps <= 600, got {max_steps}"
@@ -441,26 +441,42 @@ def sample_outputs_for_inspection(
 
 def build_multi_objective_reward_funcs(
     monitor: MonitoredGRPOReward | None = None,
+    reward_version: str | None = None,
 ) -> list[Any]:
     """Return the three split reward callables for MO-GRPO / GDPO training.
 
     When a MonitoredGRPOReward instance is provided, wrap grounding with telemetry.
+    Forward resolved reward_version across all three streams when set.
     Return [grounding_fn, reward_pedagogy_fn, reward_style_fn].
     """
-    if monitor is None:
+    resolved_version = reward_version or (
+        monitor.reward_version if monitor is not None else None
+    )
+
+    def _wrap_stream(base_fn: Any, record_monitor: bool = False) -> Any:
+        def _stream_fn(
+            prompts: list[Any],
+            completions: list[Any],
+            **kwargs: Any,
+        ) -> list[float]:
+            call_kwargs = dict(kwargs)
+            if resolved_version is not None and "reward_version" not in call_kwargs:
+                call_kwargs["reward_version"] = resolved_version
+            if record_monitor and monitor is not None:
+                monitor(prompts, completions, **call_kwargs)
+            return base_fn(prompts, completions, **call_kwargs)
+
+        _stream_fn.__name__ = base_fn.__name__
+        return _stream_fn
+
+    if monitor is None and resolved_version is None:
         return [reward_grounding_fn, reward_pedagogy_fn, reward_style_fn]
 
-    def _monitored_grounding_fn(
-        prompts: list[Any],
-        completions: list[Any],
-        **kwargs: Any,
-    ) -> list[float]:
-        # Record telemetry via monitor while returning only grounding stream
-        monitor(prompts, completions, **kwargs)
-        return reward_grounding_fn(prompts, completions, **kwargs)
-
-    _monitored_grounding_fn.__name__ = "reward_grounding_fn"
-    return [_monitored_grounding_fn, reward_pedagogy_fn, reward_style_fn]
+    return [
+        _wrap_stream(reward_grounding_fn, record_monitor=monitor is not None),
+        _wrap_stream(reward_pedagogy_fn),
+        _wrap_stream(reward_style_fn),
+    ]
 
 
 class MonitoredGRPOReward:
@@ -468,7 +484,7 @@ class MonitoredGRPOReward:
 
     Score completions with rule checks for reinforcement learning.
     Log mean reward, collapse metrics, and failure rates across training steps.
-    Support Reward v1 and Reward v2, plus optional CMDP primal-dual multiplier.
+    Support Reward v1, Reward v2, and Reward v3, plus optional CMDP primal-dual multiplier.
     Save sample completions for manual review.
     """
 

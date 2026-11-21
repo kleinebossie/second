@@ -37,7 +37,11 @@ export {
   computeSkewerFact,
   computeDiscoveredAttackFact,
   computeMateThreatFact,
+  computeRecaptureActivityFact,
   computeRefutationReasonFact,
+  computeLineComparisonFact,
+  computeMovePositionalFact,
+  computePositionStructureFact,
   appendPositionFacts,
   extractFacts,
 } from "./facts.js";

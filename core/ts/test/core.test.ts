@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Chess } from "chessops";
 import { parseFen } from "chessops/fen";
-import { Color, NormalMove } from "chessops/types";
+import { NormalMove } from "chessops/types";
 import { parseUci } from "chessops/util";
 import { describe, expect, it } from "vitest";
 import {
@@ -19,13 +19,19 @@ import {
   computeChecksAndCapturesFacts,
   computeHangingFacts,
   computeKingSafetyFacts,
+  computeLineComparisonFact,
   computeMaterialFact,
+  computeMovePositionalFact,
   computeMovedPieceAttackFact,
   computePhaseFact,
+  computePositionStructureFact,
+  computeRecaptureActivityFact,
+  computeRefutationReasonFact,
   computeReplyAndMaterialChangeFacts,
   computeThreatFact,
   EngineEval,
   EngineScore,
+  extractFacts,
   formatQwenChatPrompt,
   lookupOpening,
   OPENING_BOOK,
@@ -33,7 +39,6 @@ import {
   scoreToWhiteCp,
   SYSTEM_MESSAGE,
   winChance,
-  winChanceSide,
   winChanceWhite,
 } from "../src/index.js";
 
@@ -262,11 +267,47 @@ describe("Hanging pieces facts", () => {
 });
 
 describe("Checks and captures facts", () => {
-  it("detects legal checks and high value captures", () => {
+  it("filters noisy checks while keeping high value captures", () => {
     const b = setupBoard("r1bqkb1r/pppp1ppp/8/4p3/2Bn4/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5");
     const facts = computeChecksAndCapturesFacts(b);
-    expect(facts).toContain("White has a check: Bxf7+.");
+    expect(facts).not.toContain("White has a check: Bxf7+.");
     expect(facts).toContain("White can capture the knight on d4 with Nxd4.");
+  });
+
+  it("keeps Stockfish PV checks within 100 cp and drops weaker PV checks", () => {
+    const fen = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 5";
+    const b = setupBoard(fen);
+    const evClose: EngineEval = {
+      fen,
+      pvs: [
+        { score: { type: "cp", value: 25 }, moves: ["c1g5", "h7h6"] },
+        { score: { type: "cp", value: -40 }, moves: ["c4f7", "e8f7"] },
+      ],
+    };
+    expect(computeChecksAndCapturesFacts(b, evClose)).toContain("White has a check: Bxf7+.");
+
+    const evFar: EngineEval = {
+      fen,
+      pvs: [
+        { score: { type: "cp", value: 30 }, moves: ["c1g5", "h7h6"] },
+        { score: { type: "cp", value: -120 }, moves: ["c4f7", "e8f7"] },
+      ],
+    };
+    expect(computeChecksAndCapturesFacts(b, evFar)).not.toContain("White has a check: Bxf7+.");
+  });
+
+  it("keeps mate, material-winning, royal-fork, and castling-strip checks", () => {
+    const bMate = setupBoard("6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1");
+    expect(computeChecksAndCapturesFacts(bMate)).toContain("White has a check: Rd8#.");
+
+    const bWinCap = setupBoard("8/4k3/3n4/4P3/8/8/8/4K3 w - - 0 1");
+    expect(computeChecksAndCapturesFacts(bWinCap)).toContain("White has a check: exd6+.");
+
+    const bFork = setupBoard("r3k2r/ppp2ppp/8/3N4/8/8/PPP2PPP/R1B1K2R w KQkq - 0 10");
+    expect(computeChecksAndCapturesFacts(bFork)).toContain("White has a check: Nxc7+.");
+
+    const bCastleStrip = setupBoard("4k2r/4pppp/8/8/2B5/8/8/4K3 w k - 0 15");
+    expect(computeChecksAndCapturesFacts(bCastleStrip)).toContain("White has a check: Bb5+.");
   });
 });
 
@@ -349,7 +390,7 @@ describe("Reply and material change facts", () => {
     const facts = computeReplyAndMaterialChangeFacts(bBefore, move, bAfter, evalAfter);
     expect(facts.length).toBe(2);
     expect(facts[0]).toBe("After d5, White's best reply is exd6.");
-    expect(facts[1]).toBe("After d5, White captures the pawn on d6 with exd6.");
+    expect(facts[1]).toBe("After d5, White captures the pawn on d5 with exd6.");
   });
 });
 
@@ -467,76 +508,327 @@ describe("Full prompt formatting", () => {
   });
 });
 
+interface GoldenCase {
+  task: string;
+  level: string;
+  detail: string;
+  fen: string;
+  eval_before: EngineEval;
+  eval_after?: EngineEval | null;
+  move_uci?: string | null;
+  expected_user_message: string;
+  expected_chat_prompt: string;
+}
+
+function assertGoldenFile(filename: string, expectedCount: number): void {
+  const goldenPath = resolve(import.meta.dirname, `../../golden/${filename}`);
+  expect(existsSync(goldenPath)).toBe(true);
+
+  const data = JSON.parse(readFileSync(goldenPath, "utf-8")) as GoldenCase[];
+  expect(data.length).toBe(expectedCount);
+
+  for (const c of data) {
+    const actualUserMsg = buildUserMessage(
+      c.task,
+      c.level,
+      c.detail,
+      c.fen,
+      c.eval_before,
+      c.eval_after,
+      c.move_uci
+    );
+    expect(actualUserMsg).toBe(c.expected_user_message);
+
+    const actualChatPrompt = formatQwenChatPrompt(actualUserMsg);
+    expect(actualChatPrompt).toBe(c.expected_chat_prompt);
+  }
+}
+
 describe("Golden parity tests", () => {
   it("verifies byte-for-byte parity against golden file", () => {
-    const goldenPath = resolve(import.meta.dirname, "../../golden/golden_200.json");
-    expect(existsSync(goldenPath)).toBe(true);
-
-    const data = JSON.parse(readFileSync(goldenPath, "utf-8"));
-    expect(data.length).toBe(200);
-    interface GoldenCase {
-      task: string;
-      level: string;
-      detail: string;
-      fen: string;
-      eval_before: EngineEval;
-      eval_after?: EngineEval | null;
-      move_uci?: string | null;
-      expected_user_message: string;
-      expected_chat_prompt: string;
-    }
-
-    for (let idx = 0; idx < data.length; idx++) {
-      const c = data[idx] as GoldenCase;
-      const actualUserMsg = buildUserMessage(
-        c.task,
-        c.level,
-        c.detail,
-        c.fen,
-        c.eval_before,
-        c.eval_after,
-        c.move_uci
-      );
-      expect(actualUserMsg).toBe(c.expected_user_message);
-
-      const actualChatPrompt = formatQwenChatPrompt(actualUserMsg);
-      expect(actualChatPrompt).toBe(c.expected_chat_prompt);
-    }
+    assertGoldenFile("golden_200.json", 200);
   });
 
   it("verifies byte-for-byte parity against tactical golden file", () => {
-    const tacticalPath = resolve(import.meta.dirname, "../../golden/golden_tactical_30.json");
-    expect(existsSync(tacticalPath)).toBe(true);
+    assertGoldenFile("golden_tactical_30.json", 30);
+  });
 
-    const data = JSON.parse(readFileSync(tacticalPath, "utf-8"));
-    expect(data.length).toBe(30);
-    interface TacticalCase {
-      task: string;
-      level: string;
-      detail: string;
-      fen: string;
-      eval_before: EngineEval;
-      eval_after?: EngineEval | null;
-      move_uci?: string | null;
-      expected_user_message: string;
-      expected_chat_prompt: string;
-    }
+  it("verifies byte-for-byte parity against positional golden file", () => {
+    assertGoldenFile("golden_positional_30.json", 30);
+  });
+});
 
-    for (let idx = 0; idx < data.length; idx++) {
-      const c = data[idx] as TacticalCase;
-      const actualUserMsg = buildUserMessage(
-        c.task,
-        c.level,
-        c.detail,
-        c.fen,
-        c.eval_before,
-        c.eval_after,
-        c.move_uci
-      );
-      expect(actualUserMsg).toBe(c.expected_user_message);
+describe("Positional and Phase 11 facts", () => {
+  it("detects opponent recapture centralization and activity gain", () => {
+    const bBefore = setupBoard("rnb1k2r/ppppqppp/5n2/4p3/1bPP4/2N1PN2/PP1B1PPP/R2QKB1R b KQkq - 0 6");
+    const move = parseUci("e5d4")! as NormalMove;
+    const bAfter = bBefore.clone();
+    bAfter.play(move);
+    const evalAfter: EngineEval = {
+      fen: "",
+      pvs: [{ score: { type: "cp", value: 74 }, moves: ["f3d4", "e8g8"] }],
+    };
+    expect(computeRecaptureActivityFact(bBefore, move, bAfter, evalAfter)).toBe(
+      "After exd4, White's recapture Nxd4 centralizes the knight."
+    );
 
-      const actualChatPrompt = formatQwenChatPrompt(actualUserMsg);
-      expect(actualChatPrompt).toBe(c.expected_chat_prompt);
-    }
+    const bAct = setupBoard("r2qk2r/ppp2ppp/2np1n2/2b1p3/2B1P1b1/2NP1N2/PPP2PPP/R1BQ1RK1 b kq - 0 7");
+    const mAct = parseUci("g4f3")! as NormalMove;
+    const baAct = bAct.clone();
+    baAct.play(mAct);
+    const evAct: EngineEval = {
+      fen: "",
+      pvs: [{ score: { type: "cp", value: 70 }, moves: ["d1f3", "c6d4"] }],
+    };
+    expect(computeRecaptureActivityFact(bAct, mAct, baAct, evAct)).toBe(
+      "After Bxf3, White's recapture Qxf3 increases queen activity."
+    );
+  });
+
+  it("extracts positional refutation and line comparison facts", () => {
+    const fen = "rnb1k2r/ppppqppp/5n2/4p3/1bPP4/2N1PN2/PP1B1PPP/R2QKB1R b KQkq - 0 6";
+    const b = setupBoard(fen);
+    const m = parseUci("e5d4")! as NormalMove;
+    const ba = b.clone();
+    ba.play(m);
+    const eb: EngineEval = {
+      fen,
+      pvs: [{ score: { type: "cp", value: 16 }, moves: ["e5e4", "f3g1", "b4c3", "d2c3"] }],
+    };
+    const ea: EngineEval = {
+      fen: "",
+      pvs: [{ score: { type: "cp", value: 74 }, moves: ["f3d4", "e8g8", "f1d3"] }],
+    };
+    expect(computeRefutationReasonFact(b, m, ba, eb, ea)).toBe(
+      "Best move e4 gains space and attacks the knight on f3 instead of trading in the center."
+    );
+    expect(computeLineComparisonFact(b, m, ba, eb, ea)).toBe(
+      "Unlike exd4, e4 prevents White from centralizing pieces."
+    );
+  });
+
+  it("extracts quiet move positional and position structure facts", () => {
+    const bCastle = setupBoard("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4");
+    const mCastle = parseUci("e1g1")! as NormalMove;
+    const baCastle = bCastle.clone();
+    baCastle.play(mCastle);
+    expect(computeMovePositionalFact(bCastle, mCastle, baCastle)).toBe(
+      "O-O castles to safeguard the king."
+    );
+
+    const bTension = setupBoard("r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3");
+    expect(computePositionStructureFact(bTension)).toBe(
+      "Central pawn tension exists between d4 and e5."
+    );
+
+    const bSpace = setupBoard("rnbqkbnr/pp3ppp/2p1p3/8/2PPP3/2N5/PP3PPP/R1BQKBNR w KQkq - 0 5");
+    expect(computePositionStructureFact(bSpace)).toBe("White has more central space.");
+  });
+
+  it("handles en passant check, defended promo check, O-O+, rook files, mate comparison, and illegal moves", () => {
+    const bEp = setupBoard("8/4k3/8/2Pp4/2N5/8/8/6K1 w - d6 0 1");
+    expect(computeChecksAndCapturesFacts(bEp)).toEqual(["White has a check: cxd6+."]);
+
+    const bPromoUndef = setupBoard("3r3k/4P3/8/8/8/8/8/4K3 w - - 0 1");
+    expect(computeChecksAndCapturesFacts(bPromoUndef)).toEqual([
+      "White has a check: exd8=Q+.",
+    ]);
+    const bPromoDef = setupBoard("q2r3k/4P3/8/8/8/8/8/4K3 w - - 0 1");
+    expect(computeChecksAndCapturesFacts(bPromoDef)).toEqual([
+      "White has a check: exd8=Q+.",
+    ]);
+
+    const bCas = setupBoard("5k2/8/8/8/8/8/8/4K2R w K - 0 1");
+    expect(
+      computeChecksAndCapturesFacts(bCas, {
+        fen: "",
+        pvs: [{ score: { type: "cp", value: 120 }, moves: ["e1g1"] }],
+      })
+    ).toEqual(["White has a check: O-O+."]);
+
+    const fenStart = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const evalDummy: EngineEval = {
+      fen: fenStart,
+      pvs: [{ score: { type: "cp", value: 20 }, moves: ["e2e4"] }],
+    };
+    expect(() => extractFacts("explain_move", fenStart, evalDummy, evalDummy, "e2e5")).toThrow();
+    expect(() =>
+      buildUserMessage("explain_move", "club", "short", fenStart, evalDummy, evalDummy, "e2e5")
+    ).toThrow();
+
+    const fenRk = "3k4/p4ppp/8/8/8/8/PP3PPP/R5K1 w - - 0 20";
+    const bRk = setupBoard(fenRk);
+    const mBad = parseUci("a2a3")! as NormalMove;
+    const baBad = bRk.clone();
+    baBad.play(mBad);
+    expect(
+      computeRefutationReasonFact(
+        bRk,
+        mBad,
+        baBad,
+        { fen: fenRk, pvs: [{ score: { type: "cp", value: 60 }, moves: ["a1d1"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: -20 }, moves: ["d8c7"] }] }
+      )
+    ).toBe("Best move Rd1+ places the rook on an open file.");
+
+    const mAd1 = parseUci("a1d1")! as NormalMove;
+    const baAd1 = bRk.clone();
+    baAd1.play(mAd1);
+    expect(computeMovePositionalFact(bRk, mAd1, baAd1)).toBe("Rd1+ places the rook on the open d-file.");
+
+    const fenMate = "6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 25";
+    const bMate = setupBoard(fenMate);
+    const mh3 = parseUci("h2h3")! as NormalMove;
+    const bah3 = bMate.clone();
+    bah3.play(mh3);
+    expect(
+      computeLineComparisonFact(
+        bMate,
+        mh3,
+        bah3,
+        { fen: fenMate, pvs: [{ score: { type: "mate", value: 1 }, moves: ["d1d8"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: 0 }, moves: ["h7h6", "g1h2"] }] }
+      )
+    ).toBe("Unlike h3, the best line with Rd8# leads to checkmate.");
+
+    const fenAv = "4r1k1/5ppp/8/8/8/8/PR3PPP/6K1 w - - 0 25";
+    const bAv = setupBoard(fenAv);
+    const ma3 = parseUci("a2a3")! as NormalMove;
+    const baa3 = bAv.clone();
+    baa3.play(ma3);
+    expect(
+      computeLineComparisonFact(
+        bAv,
+        ma3,
+        baa3,
+        { fen: fenAv, pvs: [{ score: { type: "cp", value: 0 }, moves: ["g2g3", "e8e1", "g1g2", "g7g6"] }] },
+        { fen: "", pvs: [{ score: { type: "mate", value: -1 }, moves: ["e8e1"] }] }
+      )
+    ).toBe("Unlike a3, g3 avoids checkmate.");
+
+    const fenEx = "3r2k1/pp3ppp/8/3N4/8/8/PP3PPP/3R2K1 b - - 0 22";
+    const bEx = setupBoard(fenEx);
+    const mrxd5 = parseUci("d8d5")! as NormalMove;
+    const barxd5 = bEx.clone();
+    barxd5.play(mrxd5);
+    expect(
+      computeLineComparisonFact(
+        bEx,
+        mrxd5,
+        barxd5,
+        { fen: fenEx, pvs: [{ score: { type: "cp", value: 0 }, moves: ["g8f8", "d5e3", "g7g6", "d1c1"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: 100 }, moves: ["d1d5", "g8f8", "g1f1"] }] }
+      )
+    ).toBe("Unlike Rxd5, the best line with Kf8 avoids losing material.");
+
+    const fenBxc6 = "r1bqkb1r/pp1p1ppp/2n1pn2/1Bp5/3PP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 5";
+    const bBxc6 = setupBoard(fenBxc6);
+    const mBxc6 = parseUci("b5c6")! as NormalMove;
+    const baBxc6 = bBxc6.clone();
+    baBxc6.play(mBxc6);
+    const refBxc6 = computeRefutationReasonFact(
+      bBxc6,
+      mBxc6,
+      baBxc6,
+      { fen: fenBxc6, pvs: [{ score: { type: "cp", value: 75 }, moves: ["c2c4"] }] },
+      { fen: "", pvs: [{ score: { type: "cp", value: -20 }, moves: ["d7c6"] }] }
+    );
+    expect(refBxc6).not.toBeNull();
+    expect(refBxc6).not.toContain("instead of trading");
+
+    const fenF3 = "rnbqkb1r/pppp1ppp/8/4p3/4P1n1/8/PPPP1PPP/RNBQKBNR w KQkq - 2 4";
+    const bF3 = setupBoard(fenF3);
+    const mf3Bad = parseUci("a2a3")! as NormalMove;
+    const baf3Bad = bF3.clone();
+    baf3Bad.play(mf3Bad);
+    expect(
+      computeRefutationReasonFact(
+        bF3,
+        mf3Bad,
+        baf3Bad,
+        { fen: fenF3, pvs: [{ score: { type: "cp", value: 60 }, moves: ["f2f3"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: -30 }, moves: ["g4f6"] }] }
+      )
+    ).toBe("Best move f3 attacks the knight on g4.");
+
+    const fenOdd = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3";
+    const bOdd = setupBoard(fenOdd);
+    const ma3Odd = parseUci("a2a3")! as NormalMove;
+    const baa3Odd = bOdd.clone();
+    baa3Odd.play(ma3Odd);
+    expect(
+      computeLineComparisonFact(
+        bOdd,
+        ma3Odd,
+        baa3Odd,
+        { fen: fenOdd, pvs: [{ score: { type: "cp", value: 40 }, moves: ["f1b5", "c8d7", "b5c6"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: -10 }, moves: ["d7d6", "f1c4"] }] }
+      )
+    ).toBeNull();
+
+    const fenPtp = "4k3/8/8/4n3/3P4/8/8/4K3 w - - 0 1";
+    const bPtp = setupBoard(fenPtp);
+    const mDxe5N = parseUci("d4e5")! as NormalMove;
+    const baDxe5N = bPtp.clone();
+    baDxe5N.play(mDxe5N);
+    expect(computeMovePositionalFact(bPtp, mDxe5N, baDxe5N)).toBeNull();
+
+    const fenPtpPawn = "4k3/8/8/4p3/3P4/8/8/4K3 w - - 0 1";
+    const bPtpPawn = setupBoard(fenPtpPawn);
+    const mDxe5P = parseUci("d4e5")! as NormalMove;
+    const baDxe5P = bPtpPawn.clone();
+    baDxe5P.play(mDxe5P);
+    expect(computeMovePositionalFact(bPtpPawn, mDxe5P, baDxe5P)).toBe("dxe5 releases central tension on e5.");
+
+    const fenRopen = "6k1/R3p3/8/8/8/8/P7/6K1 w - - 0 1";
+    const bRopen = setupBoard(fenRopen);
+    const mRxe7 = parseUci("a7e7")! as NormalMove;
+    const baRxe7 = bRopen.clone();
+    baRxe7.play(mRxe7);
+    expect(computeMovePositionalFact(bRopen, mRxe7, baRxe7)).toBe("Rxe7 places the rook on the open e-file.");
+
+    const fenC960 = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
+    const evC960: EngineEval = {
+      fen: fenC960,
+      pvs: [{ score: { type: "cp", value: 0 }, moves: ["e1g1"] }],
+    };
+    expect(extractFacts("explain_move", fenC960, evC960, evC960, "e1g1").length).toBeGreaterThan(0);
+    expect(() => extractFacts("explain_move", fenC960, evC960, evC960, "e1h1")).toThrow();
+    expect(() => buildUserMessage("explain_move", "club", "short", fenC960, evC960, evC960, "e1h1")).toThrow();
+
+    const fenDev152 = "r1bqk2r/2ppbppp/p1n2n2/1p2p3/4P3/1B3N2/PPPP1PPP/RNBQ1RK1 w kq - 2 7";
+    const bDev152 = setupBoard(fenDev152);
+    const mC4 = parseUci("c2c4")! as NormalMove;
+    const baC4 = bDev152.clone();
+    baC4.play(mC4);
+    const lcDev152 = computeLineComparisonFact(
+      bDev152,
+      mC4,
+      baC4,
+      {
+        fen: fenDev152,
+        pvs: [{ score: { type: "cp", value: 30 }, moves: ["f1e1", "h7h6", "h2h3", "c6a5", "b3c2", "c7c5"] }],
+      },
+      {
+        fen: "",
+        pvs: [{ score: { type: "cp", value: -34 }, moves: ["c6a5", "c1d2", "a5b3", "a2b3", "c8e6"] }],
+      }
+    );
+    expect(lcDev152 === null || !lcDev152.includes("avoids losing material")).toBe(true);
+
+    const fenDownP = "4k3/8/8/4p3/8/5N2/8/4K3 w - - 0 1";
+    const bDownP = setupBoard(fenDownP);
+    const mKf1 = parseUci("e1f1")! as NormalMove;
+    const baKf1 = bDownP.clone();
+    baKf1.play(mKf1);
+    expect(
+      computeLineComparisonFact(
+        bDownP,
+        mKf1,
+        baKf1,
+        { fen: fenDownP, pvs: [{ score: { type: "cp", value: 0 }, moves: ["f3e5", "e8e7"] }] },
+        { fen: "", pvs: [{ score: { type: "cp", value: -120 }, moves: ["e8e7"] }] }
+      )
+    ).toBe("Unlike Kf1, the best line with Nxe5 wins a pawn.");
   });
 });

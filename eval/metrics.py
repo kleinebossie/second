@@ -10,7 +10,6 @@ from dataclasses import asdict, dataclass
 import json
 import logging
 from pathlib import Path
-import re
 from typing import Any
 
 from rewards.api import (
@@ -21,6 +20,11 @@ from rewards.api import (
     verdict_accuracy,
 )
 from rewards.scorer import (
+    V2_WEIGHT_BETTER_MOVE,
+    V2_WEIGHT_KEY_POINT,
+    V2_WEIGHT_LEVEL_FIT,
+    V2_WEIGHT_NO_REPEATS,
+    V2_WEIGHT_NOT_COPIED,
     WEIGHT_BETTER_MOVE,
     WEIGHT_KEY_POINT,
     WEIGHT_LENGTH,
@@ -44,6 +48,22 @@ HARD_CHECK_NAMES: tuple[str, ...] = (
     "relational_claims",
 )
 
+HARD_CHECK_NAMES_V1: tuple[str, ...] = HARD_CHECK_NAMES[:6]
+
+HARD_CHECK_NAMES_V3: tuple[str, ...] = HARD_CHECK_NAMES + (
+    "vague_boilerplate",
+    "positional_grounding",
+)
+
+
+def get_hard_check_names(reward_version: str = "v1") -> tuple[str, ...]:
+    """Return ordered hard check names matching the specified reward version."""
+    if reward_version == "v1":
+        return HARD_CHECK_NAMES_V1
+    if reward_version == "v3":
+        return HARD_CHECK_NAMES_V3
+    return HARD_CHECK_NAMES
+
 SOFT_SCORE_NAMES: tuple[str, ...] = (
     "key_point",
     "better_move",
@@ -61,6 +81,21 @@ SOFT_SCORE_WEIGHTS: dict[str, float] = {
     "not_copied": WEIGHT_NOT_COPIED,
     "no_repeats": WEIGHT_NO_REPEATS,
 }
+
+SOFT_SCORE_WEIGHTS_V2: dict[str, float] = {
+    "key_point": V2_WEIGHT_KEY_POINT,
+    "better_move": V2_WEIGHT_BETTER_MOVE,
+    "level_fit": V2_WEIGHT_LEVEL_FIT,
+    "not_copied": V2_WEIGHT_NOT_COPIED,
+    "no_repeats": V2_WEIGHT_NO_REPEATS,
+}
+
+
+def get_soft_score_weights(reward_version: str = "v1") -> dict[str, float]:
+    """Return canonical soft score weights for the requested reward version."""
+    if reward_version in ("v2", "v3"):
+        return dict(SOFT_SCORE_WEIGHTS_V2)
+    return dict(SOFT_SCORE_WEIGHTS)
 
 
 @dataclass(frozen=True)
@@ -88,12 +123,16 @@ class ItemMetric:
     completion: str
     concept_tier: str | None = None
 
-    def composite_soft_score(self) -> float:
+    def composite_soft_score(self, reward_version: str = "v1") -> float:
         """Compute weighted sum of soft scores using canonical reward weights."""
-        return sum(
+        weights = get_soft_score_weights(reward_version)
+        total = sum(
             weight * self.soft_scores.get(name, 0.0)
-            for name, weight in SOFT_SCORE_WEIGHTS.items()
+            for name, weight in weights.items()
         )
+        if reward_version in ("v2", "v3"):
+            total *= self.soft_scores.get("length_multiplier", 1.0)
+        return total
 
     def to_dict(self) -> dict[str, Any]:
         """Convert item metric to a plain dictionary."""
@@ -234,7 +273,11 @@ def ensure_prompt_text(item: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def evaluate_item(item: dict[str, Any], completion: str | None = None) -> ItemMetric:
+def evaluate_item(
+    item: dict[str, Any],
+    completion: str | None = None,
+    reward_version: str = "v1",
+) -> ItemMetric:
     """Evaluate one model completion against item prompt and rules.
 
     If completion argument is None, read completion or output from item dict.
@@ -263,9 +306,15 @@ def evaluate_item(item: dict[str, Any], completion: str | None = None) -> ItemMe
         detail = str(item.get("detail", "short"))
         verdict = str(item.get("verdict")) if item.get("verdict") else None
 
+    check_names = get_hard_check_names(reward_version)
+
     # Score completion with rewards system
     try:
-        reward_result: RewardResult = score_completion(prompt_str, raw_completion)
+        reward_result: RewardResult = score_completion(
+            prompt_str,
+            raw_completion,
+            reward_version=reward_version,
+        )
         passed_all_hard = reward_result.passed_all_hard
         hard_checks = {k: v.passed for k, v in reward_result.hard_checks.items()}
         failed_checks = [k for k, v in reward_result.hard_checks.items() if not v.passed]
@@ -274,8 +323,8 @@ def evaluate_item(item: dict[str, Any], completion: str | None = None) -> ItemMe
     except Exception as exc:
         LOGGER.warning("Reward scoring failed for item %s: %s", item_id, exc)
         passed_all_hard = False
-        hard_checks = {name: False for name in HARD_CHECK_NAMES}
-        failed_checks = list(HARD_CHECK_NAMES)
+        hard_checks = {name: False for name in check_names}
+        failed_checks = list(check_names)
         soft_scores = {name: 0.0 for name in SOFT_SCORE_NAMES}
         reward = -1.0
 
@@ -349,15 +398,19 @@ def _compute_slice_stats(items: list[ItemMetric]) -> dict[str, float]:
     }
 
 
-def aggregate_metrics(item_metrics: list[ItemMetric]) -> AggregateMetrics:
+def aggregate_metrics(
+    item_metrics: list[ItemMetric],
+    reward_version: str = "v1",
+) -> AggregateMetrics:
     """Aggregate individual item metrics into set-level metrics.
 
     Calculate hard fail rates, soft score averages, and group breakdowns.
     Return an AggregateMetrics instance.
     """
+    check_names = get_hard_check_names(reward_version)
     total = len(item_metrics)
     if total == 0:
-        empty_check_rates = {k: 0.0 for k in HARD_CHECK_NAMES}
+        empty_check_rates = {k: 0.0 for k in check_names}
         empty_soft = {k: 0.0 for k in SOFT_SCORE_NAMES}
         return AggregateMetrics(
             total_items=0,
@@ -386,7 +439,7 @@ def aggregate_metrics(item_metrics: list[ItemMetric]) -> AggregateMetrics:
     hard_fail_rate = round(100.0 * hard_fail_count / total, 2)
 
     hard_check_fail_rates: dict[str, float] = {}
-    for check_name in HARD_CHECK_NAMES:
+    for check_name in check_names:
         fails = sum(1 for it in item_metrics if not it.hard_checks.get(check_name, True))
         hard_check_fail_rates[check_name] = round(100.0 * fails / total, 2)
 
@@ -396,12 +449,12 @@ def aggregate_metrics(item_metrics: list[ItemMetric]) -> AggregateMetrics:
     passing_items = [it for it in item_metrics if it.passed_all_hard]
 
     mean_soft_all = round(
-        sum(it.composite_soft_score() for it in item_metrics) / total,
+        sum(it.composite_soft_score(reward_version) for it in item_metrics) / total,
         4,
     )
     if passing_items:
         mean_soft_passing = round(
-            sum(it.composite_soft_score() for it in passing_items) / len(passing_items),
+            sum(it.composite_soft_score(reward_version) for it in passing_items) / len(passing_items),
             4,
         )
     else:
@@ -506,19 +559,25 @@ def aggregate_metrics(item_metrics: list[ItemMetric]) -> AggregateMetrics:
     )
 
 
-def evaluate_completions(records: list[dict[str, Any]]) -> EvalMetrics:
+def evaluate_completions(
+    records: list[dict[str, Any]],
+    reward_version: str = "v1",
+) -> EvalMetrics:
     """Evaluate a collection of prompt completion records.
 
     Each record must have prompt or user_message, and completion or output.
     Calculate per-item metrics and aggregate summary statistics.
     Return an EvalMetrics container.
     """
-    items = [evaluate_item(rec) for rec in records]
-    agg = aggregate_metrics(items)
+    items = [evaluate_item(rec, reward_version=reward_version) for rec in records]
+    agg = aggregate_metrics(items, reward_version=reward_version)
     return EvalMetrics(aggregate=agg, items=items)
 
 
-def evaluate_file(path: str | Path) -> EvalMetrics:
+def evaluate_file(
+    path: str | Path,
+    reward_version: str = "v1",
+) -> EvalMetrics:
     """Load completion records from a file and calculate metrics.
 
     Support both newline-delimited JSONL and standard JSON list formats.
@@ -531,7 +590,7 @@ def evaluate_file(path: str | Path) -> EvalMetrics:
     records: list[dict[str, Any]] = []
     text = p.read_text(encoding="utf-8").strip()
     if not text:
-        return evaluate_completions([])
+        return evaluate_completions([], reward_version=reward_version)
 
     if text.startswith("["):
         loaded = json.loads(text)
@@ -543,4 +602,4 @@ def evaluate_file(path: str | Path) -> EvalMetrics:
             if line_str:
                 records.append(json.loads(line_str))
 
-    return evaluate_completions(records)
+    return evaluate_completions(records, reward_version=reward_version)

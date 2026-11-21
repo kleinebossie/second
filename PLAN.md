@@ -32,7 +32,7 @@
 | Privacy | No telemetry. Thumbs up/down ratings stay local. The user can export them. |
 | Open source | Models, data, training code, and reward code: Apache 2.0. The **extension**: GPLv3, because it bundles Stockfish (GPLv3). Everything is published. Unclear-license data: train on it, publish only the rebuild script. |
 | Hosting | GitHub (code). Hugging Face (weights, datasets, demo, rating site). |
-| Stores | Chrome Web Store (\$5 once) + Edge Add-ons (free). |
+| Stores | Chrome Web Store (\$5 once). Edge Add-ons skipped; Edge users install from the Chrome Web Store. |
 | Model names | `Second-<version>-<size>`. Version 1.0 ships `Second-1.0-2B` only. Changes to facts, data, or rewards move to `Second-1.1-*`. |
 | Release rule | A new version of a size ships only if it beats the previous version of that size on the test set. |
 
@@ -503,7 +503,7 @@ flowchart LR
 
 ---
 
-## 12. Phase 10 — Soft-Release Second-1.0-2B: COMPLETED (2026-11-15)
+## 12. Phase 10 — Soft-Release Second-1.0-2B: COMPLETED (2026-11-20; Quiet Beta Ongoing)
 
 Goal: ship `Second-1.0-2B` quietly as a preview release without broad public promotion. Real player ratings will guide the `v1.1` fixes.
 
@@ -511,30 +511,30 @@ Goal: ship `Second-1.0-2B` quietly as a preview release without broad public pro
 2. [x] `0.8B` selector disabled in the extension (`extension/sidepanel.html`, `extension/src/sidepanel/main.ts`, `extension/src/runtime/modelRunner.ts`, `extension/store/description.txt`) so `v1.0` users only download the trained `2B` model.
 3. [x] Deployed static browser demo Space (`joebos/second-chess-demo`, built via `demo_space/static/build.js`) running `Second-1.0-2B` and Stockfish in the browser.
 4. [x] Packaged `extension/release/second-extension-v1.0.0.zip` and published GitHub release `v1.0.0`, without broad public promotion.
-5. [x] Chrome Web Store listing, screenshots, promo tiles, and privacy disclosures completed for submission.
-6. [ ] Edge Add-ons (optional, free): submit `second-extension-v1.0.0.zip` after Chrome Web Store approval.
-7. [ ] Share quietly with trusted testers to collect exported thumbs-up and thumbs-down ratings. **Hold r/chess and Lichess forum announcements until `v1.1` ships.**
+5. [x] Chrome Web Store listing published and live.
+6. [x] Edge Add-ons skipped. Partner Center account verification failed, and Edge users install directly from the Chrome Web Store.
+7. [ ] Share quietly with trusted testers to collect exported thumbs-up and thumbs-down ratings (ongoing). **Hold r/chess and Lichess forum announcements until `v1.1` ships.**
 
 ---
 
-## 13. Phase 11 — Second-1.1 Fact Extractor and Verification Upgrades (NEXT PHASE)
+## 13. Phase 11 — Second-1.1 Fact Extractor and Verification Upgrades: COMPLETED (2026-11-20)
 
 **Decision:** skip `Second-1.0-0.8B`, `Second-1.0-4B`, and `Second-1.0-9B`. Do not spend compute training more sizes on the frozen `v1.0` fact format. Focus directly on `v1.1`.
 
-Record all recipe changes in `docs/changes-1.1.md`:
+Record all recipe changes in [`docs/changes-1.1.md`](docs/changes-1.1.md):
 
-1. **Remove noisy check facts:** update `computeChecksAndCapturesFacts` in `core/ts/src/facts.ts` and `core/python/facts.py`. Report a check only if Stockfish's top lines include it or if the check wins material or forces an advantage.
-2. **Add positional and refutation facts:** update `computeRefutationReasonFact` and position facts in `core/python/` and `core/ts/` (must pass all golden parity tests):
+1. [x] **Remove noisy check facts:** update `computeChecksAndCapturesFacts` in [`core/ts/src/facts.ts`](core/ts/src/facts.ts) and [`core/python/facts.py`](core/python/facts.py). Report a check only if Stockfish top lines include it or if the check wins material or forces an advantage.
+2. [x] **Add positional and refutation facts:** update `computeRefutationReasonFact`, `computeLineComparisonFact`, `computeMovePositionalFact`, and `computePositionStructureFact` in [`core/python/`](core/python/) and [`core/ts/`](core/ts/) (260 golden cases + 480 v1.1 eval items pass byte-for-byte parity):
    - Detect when an opponent recapture centralizes a piece or increases piece activity.
    - Explain why pawn advances or central moves (such as `e4` vs trading in the center) keep space or tension.
-   - Compare key differences between the played line and the best line.
-3. **Expand test and dev sets from soft-launch failures:** add exported thumbs-down cases (including subtle positional inaccuracies such as the `6... exd4` test case) to `eval/devset-1.1.jsonl` and `eval/testset-1.1.jsonl`.
-4. **Add rule checks:** reject vague boilerplate (such as unsupported `"blocks coordination"` claims) and enforce reference to positional facts when no tactic exists.
-5. **Use verified self-training (`RFT` + `GRPO`), not Gemini API distillation:** generate candidate completions from open-weight models (`Qwen`), verify them strictly against Stockfish facts and rule checks, and train with `GRPO`. (Gemini API terms prohibit training competing models.)
+   - Compare key differences between the played line and the best line across equalized plies.
+3. [x] **Expand test and dev sets from soft-launch failures:** build [`eval/devset-1.1.jsonl`](eval/devset-1.1.jsonl) (160 items) and [`eval/testset-1.1.jsonl`](eval/testset-1.1.jsonl) (320 items) with zero split contamination, including `test_301` (`6... exd4` vs `6... e4`) and `--ratings-files` thumbs-down ingestion in [`eval/build_eval_v1_1.py`](eval/build_eval_v1_1.py). Frozen `v1.0` eval sets remain untouched.
+4. [x] **Add rule checks:** add `vague_boilerplate` and `positional_grounding` (`Reward v3`, 11 hard checks) in [`rewards/claims.py`](rewards/claims.py), [`rewards/scorer.py`](rewards/scorer.py), [`rewards/api.py`](rewards/api.py), [`training/grpo_data.py`](training/grpo_data.py), [`eval/metrics.py`](eval/metrics.py), and [`eval/run_eval.py`](eval/run_eval.py).
+5. [x] **Use verified self-training (`RFT` + `GRPO`), not Gemini API distillation:** build [`data/pipeline/rft_v1_1.py`](data/pipeline/rft_v1_1.py) and [`training/configs/second-1.1-recipe.yaml`](training/configs/second-1.1-recipe.yaml) enforcing open-weight Qwen models (`Qwen/*`, `unsloth/*`, local paths), Fast mode, Reward v3 gating, and 3-stream GDPO (`multi_objective_aggregation: normalize_then_sum`).
 
 ---
 
-## 14. Phase 12 — v1.1 Model Lineup, Public Launch, and Release Loop
+## 14. Phase 12 — v1.1 Model Lineup, Public Launch, and Release Loop (NEXT PHASE)
 
 Each new version runs the continuous improvement loop:
 

@@ -10,8 +10,12 @@ from .facts import (
     classify_verdict,
     compute_discovered_attack_fact,
     compute_fork_fact,
+    compute_line_comparison_fact,
     compute_mate_threat_fact,
+    compute_move_positional_fact,
     compute_pin_fact,
+    compute_position_structure_fact,
+    compute_recapture_activity_fact,
     compute_refutation_reason_fact,
     compute_skewer_fact,
     extract_facts,
@@ -26,6 +30,7 @@ from .prompt import (
     build_prompt_messages,
     build_user_message,
     format_qwen_chat_prompt,
+    rebuild_v1_1_record,
 )
 
 __all__ = [
@@ -34,6 +39,7 @@ __all__ = [
     "build_user_message",
     "build_prompt_messages",
     "format_qwen_chat_prompt",
+    "rebuild_v1_1_record",
     "win_chance",
     "classify_verdict",
     "OPENING_BOOK",
@@ -43,5 +49,9 @@ __all__ = [
     "compute_skewer_fact",
     "compute_discovered_attack_fact",
     "compute_mate_threat_fact",
+    "compute_recapture_activity_fact",
     "compute_refutation_reason_fact",
+    "compute_line_comparison_fact",
+    "compute_move_positional_fact",
+    "compute_position_structure_fact",
 ]

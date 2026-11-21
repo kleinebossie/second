@@ -32,12 +32,12 @@ from eval.judge import (
     run_judge_eval,
 )
 from eval.metrics import (
-    SOFT_SCORE_WEIGHTS,
     AggregateMetrics,
     EvalMetrics,
     ItemMetric,
     evaluate_completions,
     evaluate_file,
+    get_soft_score_weights,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ def generate_markdown_report(
     metrics: EvalMetrics,
     judge_results: dict[str, Any] | None = None,
     testset_path: str = "eval/testset-1.0.jsonl",
+    reward_version: str = "v1",
 ) -> str:
     """Format evaluation outcomes into a structured Markdown report.
 
@@ -67,6 +68,7 @@ def generate_markdown_report(
         f"- **Model**: {model_name}",
         f"- **Date**: {now_str}",
         f"- **Test Set**: `{testset_path}`",
+        f"- **Reward Version**: `{reward_version}`",
         f"- **Total Items**: {agg.total_items}",
         "",
         "## 1. Executive Summary",
@@ -87,11 +89,16 @@ def generate_markdown_report(
         mean_ov = rub_summary.get("mean_overall", 0.0)
         lines.append(f"| Judge Rubric Overall | **{mean_ov:.2f} / 5.0** | Gemini Flash evaluation |")
 
+    hard_policy_note = (
+        "If any hard check fails in v1, the final reward is -1.0."
+        if reward_version == "v1"
+        else f"Hard check failures in {reward_version} apply graded negative penalties (-0.50 per fatal hallucination check, -0.35 for one style or claim check, -0.70 for two or more, capped at -1.0)."
+    )
     lines.extend([
         "",
         "## 2. Hard Check Hallucination Metrics",
         "",
-        "If any hard check fails, the final reward is -1.0.",
+        hard_policy_note,
         "",
         "| Check Name | Failure Rate (%) | Outcome Description |",
         "|---|---|---|",
@@ -101,6 +108,13 @@ def generate_markdown_report(
         status = "Clean" if fail_rate == 0.0 else f"{fail_rate:.1f}% failed"
         lines.append(f"| `{check_name}` | {fail_rate:.1f}% | {status} |")
 
+    soft_weights = get_soft_score_weights(reward_version)
+    length_weight_cell = (
+        "multiplier"
+        if reward_version in ("v2", "v3")
+        else f"{soft_weights['length']:.2f}"
+    )
+
     lines.extend([
         "",
         "## 3. Soft Score Breakdown",
@@ -109,12 +123,12 @@ def generate_markdown_report(
         "",
         "| Soft Metric | Weight | Average Score (0.0 - 1.0) |",
         "|---|---|---|",
-        f"| `key_point` | {SOFT_SCORE_WEIGHTS['key_point']:.2f} | {agg.soft_score_breakdown.get('key_point', 0.0):.4f} |",
-        f"| `better_move` | {SOFT_SCORE_WEIGHTS['better_move']:.2f} | {agg.soft_score_breakdown.get('better_move', 0.0):.4f} |",
-        f"| `length` | {SOFT_SCORE_WEIGHTS['length']:.2f} | {agg.soft_score_breakdown.get('length', 0.0):.4f} |",
-        f"| `level_fit` | {SOFT_SCORE_WEIGHTS['level_fit']:.2f} | {agg.soft_score_breakdown.get('level_fit', 0.0):.4f} |",
-        f"| `not_copied` | {SOFT_SCORE_WEIGHTS['not_copied']:.2f} | {agg.soft_score_breakdown.get('not_copied', 0.0):.4f} |",
-        f"| `no_repeats` | {SOFT_SCORE_WEIGHTS['no_repeats']:.2f} | {agg.soft_score_breakdown.get('no_repeats', 0.0):.4f} |",
+        f"| `key_point` | {soft_weights['key_point']:.2f} | {agg.soft_score_breakdown.get('key_point', 0.0):.4f} |",
+        f"| `better_move` | {soft_weights['better_move']:.2f} | {agg.soft_score_breakdown.get('better_move', 0.0):.4f} |",
+        f"| `length` | {length_weight_cell} | {agg.soft_score_breakdown.get('length', 0.0):.4f} |",
+        f"| `level_fit` | {soft_weights['level_fit']:.2f} | {agg.soft_score_breakdown.get('level_fit', 0.0):.4f} |",
+        f"| `not_copied` | {soft_weights['not_copied']:.2f} | {agg.soft_score_breakdown.get('not_copied', 0.0):.4f} |",
+        f"| `no_repeats` | {soft_weights['no_repeats']:.2f} | {agg.soft_score_breakdown.get('no_repeats', 0.0):.4f} |",
         "",
         "## 4. Subgroup Breakdowns",
         "",
@@ -272,6 +286,7 @@ def run_eval(
     judge_model: str = DEFAULT_JUDGE_MODEL,
     cache_path: str | Path = DEFAULT_CACHE_PATH,
     limit: int | None = None,
+    reward_version: str = "v1",
 ) -> dict[str, Any]:
     """Execute evaluation workflow and create evaluation report.
 
@@ -313,9 +328,9 @@ def run_eval(
     if limit is not None and limit > 0:
         records = records[:limit]
 
-    # 2. Run Automatic Metrics (Phase 4.2)
-    LOGGER.info("Computing automatic metrics on %d completions...", len(records))
-    eval_metrics = evaluate_completions(records)
+    # 2. Run Automatic Metrics (Phase 4.2 / Phase 11 v3)
+    LOGGER.info("Computing automatic metrics (%s) on %d completions...", reward_version, len(records))
+    eval_metrics = evaluate_completions(records, reward_version=reward_version)
 
     # 3. Handle Opponent Baselines
     opponent_records: dict[str, list[dict[str, Any]]] = {}
@@ -366,6 +381,7 @@ def run_eval(
         "model_name": resolved_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "testset": str(testset_path),
+        "reward_version": reward_version,
         "total_items": eval_metrics.aggregate.total_items,
         "automatic_metrics": eval_metrics.to_dict(),
         "judge_results": judge_results,
@@ -381,6 +397,7 @@ def run_eval(
         metrics=eval_metrics,
         judge_results=judge_results,
         testset_path=str(testset_path),
+        reward_version=reward_version,
     )
     report_path = rep_dir / f"{resolved_name}.md"
     with open(report_path, "w", encoding="utf-8") as f:
@@ -429,6 +446,13 @@ def main() -> None:
     parser.add_argument("--judge-model", type=str, default=DEFAULT_JUDGE_MODEL, help="Judge model name")
     parser.add_argument("--cache-path", type=str, default=str(DEFAULT_CACHE_PATH), help="Judge cache file path")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of test items evaluated")
+    parser.add_argument(
+        "--reward-version",
+        type=str,
+        default="v1",
+        choices=("v1", "v2", "v3"),
+        help="Reward verification version for automatic metrics (v1, v2, or v3)",
+    )
 
     args = parser.parse_args()
 
@@ -452,6 +476,7 @@ def main() -> None:
             judge_model=args.judge_model,
             cache_path=args.cache_path,
             limit=args.limit,
+            reward_version=args.reward_version,
         )
         print("\n" + "=" * 50)
         print("EVALUATION COMPLETED SUCCESSFULLY")

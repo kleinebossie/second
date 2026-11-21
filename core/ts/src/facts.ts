@@ -9,7 +9,15 @@ import { attacks, ray } from "chessops/attacks";
 import { parseFen } from "chessops/fen";
 import { makeSan, makeSanAndPlay } from "chessops/san";
 import { Color, isNormal, NormalMove, Role } from "chessops/types";
-import { kingCastlesTo, makeSquare, opposite, parseUci, roleToChar, squareRank } from "chessops/util";
+import {
+  kingCastlesTo,
+  makeSquare,
+  opposite,
+  parseUci,
+  roleToChar,
+  squareFile,
+  squareRank,
+} from "chessops/util";
 import { lookupOpening } from "./openings.js";
 
 export interface EngineScore {
@@ -43,6 +51,137 @@ export const PIECE_VALUES: Record<Role, number> = {
   queen: 9,
   king: 0,
 };
+
+const CENTRAL_SQUARES = new Set<number>([27, 28, 35, 36]); // d4, e4, d5, e5
+const WING_CENTER_45_SQUARES = new Set<number>([26, 29, 34, 37]); // c4, f4, c5, f5
+const WHITE_START_MINORS = new Set<number>([1, 2, 5, 6]); // b1, c1, f1, g1
+const BLACK_START_MINORS = new Set<number>([57, 58, 61, 62]); // b8, c8, f8, g8
+const FILE_LETTERS = "abcdefgh";
+
+/** Check if sq lies inside the central c3-f6 box. */
+function isExtendedCenter(sq: number): boolean {
+  const f = squareFile(sq);
+  const r = squareRank(sq);
+  return f >= 2 && f <= 5 && r >= 2 && r <= 5;
+}
+
+/** Check if sq lies on central fourth or fifth rank files c through f. */
+function isCenter45(sq: number): boolean {
+  const f = squareFile(sq);
+  const r = squareRank(sq);
+  return f >= 2 && f <= 5 && r >= 3 && r <= 4;
+}
+
+/** Check whether color still retains any castling rights. */
+function hasCastlingRights(pos: Chess, color: Color): boolean {
+  return pos.castles.rook[color].a !== undefined || pos.castles.rook[color].h !== undefined;
+}
+
+/** Check whether move represents castling in standard or Chess960 UCI. */
+function isCastlingMove(pos: Chess, move: NormalMove): boolean {
+  const p = pos.board.get(move.from);
+  if (!p || p.role !== "king") return false;
+  return (
+    pos.board[pos.turn].has(move.to) ||
+    Math.abs(squareFile(move.to) - squareFile(move.from)) === 2
+  );
+}
+
+/** Check whether move captures an enemy piece or en passant pawn. */
+function isCaptureMove(pos: Chess, move: NormalMove): boolean {
+  const p = pos.board.get(move.from);
+  if (!p) return false;
+  if (p.role === "king" && pos.board[pos.turn].has(move.to)) return false;
+  const target = pos.board.get(move.to);
+  if (target && target.color !== pos.turn) return true;
+  return p.role === "pawn" && pos.epSquare !== undefined && move.to === pos.epSquare;
+}
+
+/** Return true if move encodes castling in Chess960 king-takes-friendly-rook notation. */
+export function isKingTakesFriendlyRook(pos: Chess, move: NormalMove): boolean {
+  const p = pos.board.get(move.from);
+  return Boolean(p && p.role === "king" && pos.board[pos.turn].has(move.to));
+}
+
+/** Normalize king-takes-friendly-rook UCI to standard castling UCI when applicable. */
+function canonicalMoveUci(pos: Chess | undefined, uci: string): string {
+  if (!pos || !uci) return uci;
+  const move = parseUci(uci);
+  if (!move || !isNormal(move) || !isKingTakesFriendlyRook(pos, move)) return uci;
+  const kingDest = kingCastlesTo(pos.turn, move.to > move.from ? "h" : "a");
+  return `${makeSquare(move.from)}${makeSquare(kingDest)}`;
+}
+
+/** Normalize castling target squares to the king destination square. */
+function normalizeMoveTo(pos: Chess, move: NormalMove, color: Color = pos.turn): number {
+  const pieceBefore = pos.board.get(move.from);
+  if (pieceBefore && pieceBefore.role === "king" && pos.board[color].has(move.to)) {
+    return kingCastlesTo(color, move.to > move.from ? "h" : "a");
+  }
+  return move.to;
+}
+
+/** Count squares that the piece on sq attacks, excluding friendly pieces. */
+function pieceMobility(pos: Chess, sq: number): number {
+  const piece = pos.board.get(sq);
+  if (!piece) return 0;
+  return attacks(piece, sq, pos.board.occupied).diff(pos.board[piece.color]).size();
+}
+
+/** Count pawns on fileIdx for one color or both colors. */
+function countPawnsOnFile(pos: Chess, fileIdx: number, color?: Color): number {
+  let count = 0;
+  const targetColors: Color[] = color ? [color] : ["white", "black"];
+  for (const c of targetColors) {
+    for (const sq of pos.board.pawn.intersect(pos.board[c])) {
+      if (squareFile(sq) === fileIdx) count++;
+    }
+  }
+  return count;
+}
+
+/** Classify whether a rook move claims an open or half-open file. */
+function classifyRookFileMove(
+  posBefore: Chess,
+  posAfter: Chess,
+  fromSq: number,
+  toSq: number,
+  moverColor: Color
+): "open" | "half-open" | null {
+  const fromFile = squareFile(fromSq);
+  const toFile = squareFile(toSq);
+  if (fromFile === toFile) return null;
+  if (countPawnsOnFile(posBefore, toFile, moverColor) > 0) return null;
+
+  const oppColor = opposite(moverColor);
+  const fromFriendly = countPawnsOnFile(posBefore, fromFile, moverColor);
+  const fromEnemy = countPawnsOnFile(posBefore, fromFile, oppColor);
+  const toEnemy = countPawnsOnFile(posAfter, toFile, oppColor);
+
+  if (toEnemy === 0 && (fromFriendly >= 1 || fromEnemy >= 1)) {
+    return "open";
+  }
+  if (toEnemy >= 1 && fromFriendly >= 1) {
+    return "half-open";
+  }
+  return null;
+}
+
+/** Return true when move is a pawn capturing an enemy pawn or en passant. */
+function isPawnTakesPawn(posBefore: Chess, move: NormalMove): boolean {
+  const mover = posBefore.board.get(move.from);
+  if (!mover || mover.role !== "pawn") return false;
+  if (!isCaptureMove(posBefore, move)) return false;
+  if (
+    posBefore.epSquare !== undefined &&
+    move.to === posBefore.epSquare &&
+    !posBefore.board.get(move.to)
+  ) {
+    return true;
+  }
+  const target = posBefore.board.get(move.to);
+  return target !== undefined && target.role === "pawn";
+}
 
 export interface LegalMoveInfo {
   move: NormalMove;
@@ -185,16 +324,25 @@ export function classifyVerdict(
   parsedPos?: Chess
 ): Verdict {
   const parseRes = parsedPos ? null : parseFen(evalBefore.fen);
-  const isWhite = parsedPos
-    ? parsedPos.turn === "white"
-    : parseRes!.isOk
-      ? parseRes!.value.turn === "white"
+  let verdictPos = parsedPos;
+  if (!verdictPos && parseRes && parseRes.isOk) {
+    const chessRes = Chess.fromSetup(parseRes.value);
+    if (chessRes.isOk) {
+      verdictPos = chessRes.value;
+    }
+  }
+  const isWhite = verdictPos
+    ? verdictPos.turn === "white"
+    : parseRes && parseRes.isOk
+      ? parseRes.value.turn === "white"
       : evalBefore.fen.split(" ")[1] === "w";
   const pvs = evalBefore.pvs ?? [];
   const bestMoveUci =
     pvs.length > 0 && pvs[0].moves && pvs[0].moves.length > 0
       ? pvs[0].moves[0]
       : "";
+  const normMoveUci = canonicalMoveUci(verdictPos, moveUci);
+  const normBestUci = canonicalMoveUci(verdictPos, bestMoveUci);
   const wcBefore =
     pvs.length > 0 && pvs[0].score ? winChanceSide(pvs[0].score, isWhite) : 50.0;
 
@@ -208,16 +356,9 @@ export function classifyVerdict(
     wcAfter = winChanceSide(evalAfter.pvs[0].score, isWhite);
   }
 
-  if (moveUci === bestMoveUci) {
-    if (parsedPos) {
-      if (hasSingleLegalMove(parsedPos)) {
-        return "Only move";
-      }
-    } else if (parseRes && parseRes.isOk) {
-      const chessRes = Chess.fromSetup(parseRes.value);
-      if (chessRes.isOk && hasSingleLegalMove(chessRes.value)) {
-        return "Only move";
-      }
+  if (normMoveUci === normBestUci) {
+    if (verdictPos && hasSingleLegalMove(verdictPos)) {
+      return "Only move";
     }
     if (pvs.length >= 2 && pvs[1].score) {
       const wcSecond = winChanceSide(pvs[1].score, isWhite);
@@ -228,7 +369,7 @@ export function classifyVerdict(
   }
 
   const drop = wcBefore - wcAfter;
-  if (moveUci === bestMoveUci && drop <= 2.0) {
+  if (normMoveUci === normBestUci && drop <= 2.0) {
     return "Best";
   }
   if (drop >= 20.0) {
@@ -456,14 +597,16 @@ export function computeHangingFacts(pos: Chess): string[] {
   return facts.slice(0, 2);
 }
 
+/** Order legal moves deterministically with higher promotions first. */
 function compareLegalMoves(a: LegalMoveInfo, b: LegalMoveInfo): number {
   return a.from !== b.from
     ? a.from - b.from
     : a.to !== b.to
     ? a.to - b.to
-    : a.promotionVal - b.promotionVal;
+    : b.promotionVal - a.promotionVal;
 }
 
+/** Quickly filter moves that cannot deliver direct or discovered check. */
 function mightGiveCheck(pos: Chess, move: NormalMove, enemyKingSq: number | undefined): boolean {
   if (enemyKingSq === undefined) return false;
   const moverRole = pos.board.getRole(move.from);
@@ -479,34 +622,176 @@ function mightGiveCheck(pos: Chess, move: NormalMove, enemyKingSq: number | unde
   if (moverRole === "pawn" && pos.epSquare !== undefined && move.to === pos.epSquare) {
     return true;
   }
-  if (moverRole === "king" && (pos.board[pos.turn].has(move.to) || Math.abs(move.to - move.from) === 2)) {
+  if (moverRole === "king" && isCastlingMove(pos, move)) {
     return true;
   }
   return false;
 }
 
+/** Return the top Stockfish PV check within 100 centipawns of PV zero. */
+function getQualifyingPvCheck(pos: Chess, engineEval?: EngineEval | null): NormalMove | null {
+  if (!engineEval || !engineEval.pvs || engineEval.pvs.length === 0) {
+    return null;
+  }
+  const pvs = engineEval.pvs;
+  const sideSign = pos.turn === "white" ? 1.0 : -1.0;
+  const pv0Score = pvs[0].score;
+  const pv0Cp = pv0Score ? scoreToWhiteCp(pv0Score) * sideSign : null;
+
+  const limit = Math.min(3, pvs.length);
+  for (let idx = 0; idx < limit; idx++) {
+    const pv = pvs[idx];
+    const moves = pv.moves ?? [];
+    if (moves.length === 0) continue;
+    if (idx > 0) {
+      if (pv0Cp === null || !pv.score) continue;
+      const pvCp = scoreToWhiteCp(pv.score) * sideSign;
+      if (pv0Cp - pvCp > 100.0) continue;
+    }
+    const parsed = parseUci(moves[0]);
+    if (!parsed || !isNormal(parsed) || !pos.isLegal(parsed)) continue;
+    const after = pos.clone();
+    after.play(parsed);
+    if (after.isCheck()) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+/** Check if a legal check forces mate, wins material, or wins a clear advantage. */
+function isForcingCheck(pos: Chess, move: NormalMove): { isMate: boolean; qualifies: boolean } {
+  const moverPiece = pos.board.get(move.from);
+  if (!moverPiece) return { isMate: false, qualifies: false };
+
+  const side = pos.turn;
+  const opp = opposite(side);
+  const origMoverVal = PIECE_VALUES[moverPiece.role];
+  const effectiveMover = move.promotion ?? moverPiece.role;
+  const moverVal = PIECE_VALUES[effectiveMover];
+  const toSq = normalizeMoveTo(pos, move);
+
+  const target = pos.board.get(move.to);
+  const isEp =
+    moverPiece.role === "pawn" &&
+    pos.epSquare !== undefined &&
+    move.to === pos.epSquare &&
+    !target;
+  const isCap = (target !== undefined && target.color !== side) || isEp;
+  const targetVal = isEp ? PIECE_VALUES.pawn : target ? PIECE_VALUES[target.role] : 0;
+
+  const after = pos.clone();
+  after.play(move);
+  if (after.isCheckmate()) {
+    return { isMate: true, qualifies: true };
+  }
+
+  const oppLegal = getLegalMoves(after);
+  const recaptures = oppLegal.filter((r) => normalizeMoveTo(after, r) === toSq);
+
+  // Priority 2: captures material safely or wins an exchange or piece
+  if (isCap && (recaptures.length === 0 || targetVal > origMoverVal)) {
+    return { isMate: false, qualifies: true };
+  }
+
+  // Confirm the checking piece is safe before evaluating non-winning-capture forcing checks
+  let isSafe = false;
+  if (recaptures.length === 0) {
+    isSafe = true;
+  } else {
+    const defended =
+      after.kingAttackers(toSq, side, after.board.occupied).size() >= recaptures.length;
+    let allGe = true;
+    for (const r of recaptures) {
+      const rp = after.board.get(r.from);
+      if (!rp || PIECE_VALUES[rp.role] < moverVal) {
+        allGe = false;
+        break;
+      }
+    }
+    isSafe = defended && allGe;
+  }
+
+  if (!isSafe) {
+    return { isMate: false, qualifies: false };
+  }
+
+  // Priority 3a: royal fork or double attack against an undefended or higher-value piece
+  const recapturerFromSqs = new Set<number>(recaptures.map((r) => r.from));
+  const checkerAfter = after.board.get(toSq);
+  if (checkerAfter) {
+    for (const tSq of attacks(checkerAfter, toSq, after.board.occupied)) {
+      const tPiece = after.board.get(tSq);
+      if (!tPiece || tPiece.color !== opp) continue;
+      if (tPiece.role === "pawn" || tPiece.role === "king") continue;
+      if (recapturerFromSqs.has(tSq)) continue;
+      const isUndefended = after.kingAttackers(tSq, opp, after.board.occupied).isEmpty();
+      const isHigher = PIECE_VALUES[tPiece.role] > moverVal;
+      if (isUndefended || isHigher) {
+        return { isMate: false, qualifies: true };
+      }
+    }
+  }
+
+  // Priority 3b: safe check strips castling rights by forcing a king move
+  if (hasCastlingRights(after, opp) && oppLegal.length > 0) {
+    const allKingReplies = oppLegal.every((r) => after.board.get(r.from)?.role === "king");
+    if (allKingReplies) {
+      return { isMate: false, qualifies: true };
+    }
+  }
+
+  return { isMate: false, qualifies: false };
+}
+
 /**
- * Find available checks and high value captures.
- * If a check is legal, record the first check.
+ * Find Stockfish-supported or forcing checks and high value captures.
+ * If Stockfish top lines include a check within 100 centipawns, report that check.
+ * If no PV check qualifies, report a check only when it wins an advantage.
  * If a capture of a non-pawn piece is legal, record the top capture.
  */
-export function computeChecksAndCapturesFacts(pos: Chess): string[] {
+export function computeChecksAndCapturesFacts(
+  pos: Chess,
+  engineEval?: EngineEval | null
+): string[] {
   const sideName = pos.turn === "white" ? "White" : "Black";
   const facts: string[] = [];
   let checkMoveSan: string | null = null;
+  let checkMoveFromTo: [number, number] | null = null;
 
   const legalMoves = getLegalMoves(pos);
   legalMoves.sort(compareLegalMoves);
 
-  const enemyKingSq = pos.board.kingOf(opposite(pos.turn));
-  for (const m of legalMoves) {
-    if (!mightGiveCheck(pos, m.move, enemyKingSq)) continue;
-    const clone = pos.clone();
-    clone.play(m.move);
-    if (clone.isCheck()) {
-      checkMoveSan = makeSan(pos, m.move);
+  const pvCheck = getQualifyingPvCheck(pos, engineEval);
+  if (pvCheck) {
+    checkMoveSan = makeSan(pos, pvCheck);
+    checkMoveFromTo = [pvCheck.from, normalizeMoveTo(pos, pvCheck)];
+    facts.push(`${sideName} has a check: ${checkMoveSan}.`);
+  } else {
+    const enemyKingSq = pos.board.kingOf(opposite(pos.turn));
+    let mateMove: NormalMove | null = null;
+    let firstForcing: NormalMove | null = null;
+
+    for (const m of legalMoves) {
+      if (!mightGiveCheck(pos, m.move, enemyKingSq)) continue;
+      const clone = pos.clone();
+      clone.play(m.move);
+      if (!clone.isCheck()) continue;
+      const res = isForcingCheck(pos, m.move);
+      if (res.isMate) {
+        mateMove = m.move;
+        break;
+      }
+      if (res.qualifies && !firstForcing) {
+        firstForcing = m.move;
+      }
+    }
+
+    const chosenCheck = mateMove ?? firstForcing;
+    if (chosenCheck) {
+      checkMoveSan = makeSan(pos, chosenCheck);
+      checkMoveFromTo = [chosenCheck.from, normalizeMoveTo(pos, chosenCheck)];
       facts.push(`${sideName} has a check: ${checkMoveSan}.`);
-      break;
     }
   }
 
@@ -543,10 +828,17 @@ export function computeChecksAndCapturesFacts(pos: Chess): string[] {
       ? a.from - b.from
       : a.to !== b.to
       ? a.to - b.to
-      : a.promotionVal - b.promotionVal
+      : b.promotionVal - a.promotionVal
   );
 
   for (const item of captures) {
+    if (
+      checkMoveFromTo !== null &&
+      item.from === checkMoveFromTo[0] &&
+      item.to === checkMoveFromTo[1]
+    ) {
+      continue;
+    }
     const san = makeSan(pos, item.move);
     if (san !== checkMoveSan) {
       facts.push(`${sideName} can capture the ${item.role} on ${makeSquare(item.to)} with ${san}.`);
@@ -646,7 +938,7 @@ export function computeThreatFact(pos: Chess, color: Color): string | null {
         ? a.from - b.from
         : a.to !== b.to
         ? a.to - b.to
-        : a.promotionVal - b.promotionVal
+        : b.promotionVal - a.promotionVal
     );
     return `${colorName} threatens ${makeSan(temp, winningCaptures[0].move)}.`;
   }
@@ -679,11 +971,7 @@ export function computeMovedPieceAttackFact(
   }
 
   const moverColor = posBefore.turn;
-  // Normalize castling destination to king square
-  let toSq = move.to;
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
-    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
-  }
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
 
   const moveSan = makeSan(posBefore, move);
   const movedPiece = boardAfter.board.get(toSq);
@@ -781,6 +1069,7 @@ export function computeReplyAndMaterialChangeFacts(
 
   const sim = posAfter.clone();
   let cap = sim.board.get(replyMove.to);
+  let capSqIdx = replyMove.to;
   if (
     !cap &&
     posAfter.epSquare !== undefined &&
@@ -788,7 +1077,8 @@ export function computeReplyAndMaterialChangeFacts(
     posAfter.board.getRole(replyMove.from) === "pawn"
   ) {
     const epDelta = oppColor === "white" ? -8 : 8;
-    cap = sim.board.get(replyMove.to + epDelta);
+    capSqIdx = replyMove.to + epDelta;
+    cap = sim.board.get(capSqIdx);
   }
   sim.play(replyMove);
 
@@ -806,7 +1096,7 @@ export function computeReplyAndMaterialChangeFacts(
     const capVal = PIECE_VALUES[cap.role];
     const netGain = getNetPts(sim) - initialNet;
     if (netGain >= capVal) {
-      const capSq = makeSquare(replyMove.to);
+      const capSq = makeSquare(capSqIdx);
       facts.push(`After ${moveSan}, ${oppName} captures the ${cap.role} on ${capSq} with ${replySan}.`);
       return facts;
     }
@@ -833,7 +1123,16 @@ export function computeReplyAndMaterialChangeFacts(
           const netGain = getNetPts(sim2) - initialNet;
           if (netGain >= 2) {
             const sqName = makeSquare(m2.to);
-            facts.push(`After ${replySan}, ${oppName} wins the ${cap3.role} on ${sqName}.`);
+            const pBefore = posBefore.board.get(m2.to);
+            const pAfter = posAfter.board.get(m2.to);
+            const stoodOnSq =
+              (pBefore !== undefined && pBefore.role === cap3.role && pBefore.color === cap3.color) ||
+              (pAfter !== undefined && pAfter.role === cap3.role && pAfter.color === cap3.color);
+            if (stoodOnSq) {
+              facts.push(`After ${replySan}, ${oppName} wins the ${cap3.role} on ${sqName}.`);
+            } else {
+              facts.push(`After ${replySan}, ${oppName} wins the ${cap3.role}.`);
+            }
           }
         }
       }
@@ -843,11 +1142,6 @@ export function computeReplyAndMaterialChangeFacts(
   return facts;
 }
 
-/**
- * Append shared position facts to rawFacts.
- * Extract hanging pieces, checks, captures, threats, and king safety.
- * Extract material balance, phase, and opening facts.
- */
 /**
  * Check if sqMid lies strictly between sq1 and sq2 along a ray.
  */
@@ -933,6 +1227,7 @@ export function scanRay(
   return { firstSq, firstPiece, secondSq, secondPiece };
 }
 
+/** Find the top two enemy pieces forked by the piece on attackerSq. */
 function checkForkOnBoard(
   pos: Chess,
   attackerSq: number,
@@ -994,11 +1289,7 @@ export function computeForkFact(
   evalAfter?: EngineEval | null
 ): string | null {
   const moverColor = posBefore.turn;
-  let toSq = move.to;
-  const pieceBefore = posBefore.board.get(move.from);
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
-    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
-  }
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
 
   // Check moved piece
   const pair = checkForkOnBoard(boardAfter, toSq, moverColor);
@@ -1024,13 +1315,9 @@ export function computeForkFact(
     if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
       const sim = boardAfter.clone();
       const replySan = makeSan(boardAfter, replyMove);
-      sim.play(replyMove);
-      let replyTo = replyMove.to;
-      const rPieceBefore = boardAfter.board.get(replyMove.from);
       const oppColor = opposite(moverColor);
-      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
-        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
-      }
+      const replyTo = normalizeMoveTo(boardAfter, replyMove, oppColor);
+      sim.play(replyMove);
       const pairReply = checkForkOnBoard(sim, replyTo, oppColor);
       if (pairReply) {
         const p1Name = pairReply[0].target.role;
@@ -1045,6 +1332,7 @@ export function computeForkFact(
   return null;
 }
 
+/** Find the highest priority enemy piece pinned along a ray from sliderSq. */
 function checkPinOnBoard(
   pos: Chess,
   sliderSq: number,
@@ -1104,11 +1392,7 @@ export function computePinFact(
   evalAfter?: EngineEval | null
 ): string | null {
   const moverColor = posBefore.turn;
-  let toSq = move.to;
-  const pieceBefore = posBefore.board.get(move.from);
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
-    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
-  }
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
 
   // Check moved piece
   const res = checkPinOnBoard(boardAfter, toSq, moverColor);
@@ -1134,13 +1418,9 @@ export function computePinFact(
     if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
       const sim = boardAfter.clone();
       const replySan = makeSan(boardAfter, replyMove);
-      sim.play(replyMove);
-      let replyTo = replyMove.to;
-      const rPieceBefore = boardAfter.board.get(replyMove.from);
       const oppColor = opposite(moverColor);
-      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
-        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
-      }
+      const replyTo = normalizeMoveTo(boardAfter, replyMove, oppColor);
+      sim.play(replyMove);
       const resReply = checkPinOnBoard(sim, replyTo, oppColor);
       if (resReply) {
         const pName = resReply.fP.role;
@@ -1155,6 +1435,7 @@ export function computePinFact(
   return null;
 }
 
+/** Find the highest priority enemy piece skewered along a ray from sliderSq. */
 function checkSkewerOnBoard(
   pos: Chess,
   sliderSq: number,
@@ -1214,11 +1495,7 @@ export function computeSkewerFact(
   evalAfter?: EngineEval | null
 ): string | null {
   const moverColor = posBefore.turn;
-  let toSq = move.to;
-  const pieceBefore = posBefore.board.get(move.from);
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
-    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
-  }
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
 
   // Check moved piece
   const res = checkSkewerOnBoard(boardAfter, toSq, moverColor);
@@ -1244,13 +1521,9 @@ export function computeSkewerFact(
     if (replyMove && isNormal(replyMove) && boardAfter.isLegal(replyMove)) {
       const sim = boardAfter.clone();
       const replySan = makeSan(boardAfter, replyMove);
-      sim.play(replyMove);
-      let replyTo = replyMove.to;
-      const rPieceBefore = boardAfter.board.get(replyMove.from);
       const oppColor = opposite(moverColor);
-      if (rPieceBefore && rPieceBefore.role === "king" && boardAfter.board[oppColor].has(replyMove.to)) {
-        replyTo = kingCastlesTo(oppColor, replyMove.to > replyMove.from ? "h" : "a");
-      }
+      const replyTo = normalizeMoveTo(boardAfter, replyMove, oppColor);
+      sim.play(replyMove);
       const resReply = checkSkewerOnBoard(sim, replyTo, oppColor);
       if (resReply) {
         const p1Name = resReply.fP.role;
@@ -1278,11 +1551,7 @@ export function computeDiscoveredAttackFact(
   const moverColor = posBefore.turn;
   const oppColor = opposite(moverColor);
   const fromSq = move.from;
-  let toSq = move.to;
-  const pieceBefore = posBefore.board.get(move.from);
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(move.to)) {
-    toSq = kingCastlesTo(moverColor, move.to > move.from ? "h" : "a");
-  }
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
 
   interface DiscCandidate {
     targetVal: number;
@@ -1347,7 +1616,7 @@ export function computeDiscoveredAttackFact(
  */
 export function computeMateThreatFact(
   posBefore: Chess,
-  move: NormalMove,
+  _move: NormalMove,
   boardAfter: Chess,
   evalAfter?: EngineEval | null
 ): string | null {
@@ -1376,14 +1645,70 @@ export function computeMateThreatFact(
 }
 
 /**
+ * Detect whether an opponent recapture centralizes or activates a piece.
+ * Check whether the played move is a capture and the top reply recaptures there.
+ * When that recapture enters the center or gains activity, return a fact.
+ */
+export function computeRecaptureActivityFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalAfter?: EngineEval | null
+): string | null {
+  if (!isCaptureMove(posBefore, move)) return null;
+  if (!evalAfter || !evalAfter.pvs || evalAfter.pvs.length === 0) return null;
+  const pv0 = evalAfter.pvs[0];
+  if (!pv0.moves || pv0.moves.length === 0) return null;
+
+  const replyMove = parseUci(pv0.moves[0]);
+  if (!replyMove || !isNormal(replyMove) || !boardAfter.isLegal(replyMove)) return null;
+  if (replyMove.to !== move.to || !isCaptureMove(boardAfter, replyMove)) return null;
+
+  const recapPiece = boardAfter.board.get(replyMove.from);
+  if (
+    !recapPiece ||
+    (recapPiece.role !== "knight" &&
+      recapPiece.role !== "bishop" &&
+      recapPiece.role !== "rook" &&
+      recapPiece.role !== "queen")
+  ) {
+    return null;
+  }
+
+  const moveSan = makeSan(posBefore, move);
+  const replySan = makeSan(boardAfter, replyMove);
+  const oppColor = boardAfter.turn;
+  const oppName = oppColor === "white" ? "White" : "Black";
+  const pieceName = recapPiece.role;
+
+  if (CENTRAL_SQUARES.has(replyMove.to) && !CENTRAL_SQUARES.has(replyMove.from)) {
+    return `After ${moveSan}, ${oppName}'s recapture ${replySan} centralizes the ${pieceName}.`;
+  }
+
+  const mobilityBefore = pieceMobility(boardAfter, replyMove.from);
+  const simReply = boardAfter.clone();
+  simReply.play(replyMove);
+  const mobilityAfter = pieceMobility(simReply, replyMove.to);
+
+  const backRank = oppColor === "white" ? 0 : 7;
+  const developedFromBack =
+    squareRank(replyMove.from) === backRank && isExtendedCenter(replyMove.to);
+  if (developedFromBack || mobilityAfter >= mobilityBefore + 2) {
+    return `After ${moveSan}, ${oppName}'s recapture ${replySan} increases ${pieceName} activity.`;
+  }
+
+  return null;
+}
+
+/**
  * Explain what the best move accomplishes when the played move is bad.
  * When the verdict is Inaccuracy, Mistake, or Blunder, check the best move.
- * Report if the best move captures a piece, defends a hanging piece, or prepares castling.
+ * Report tactical gains, central pawn space or tension, king safety, or activity.
  */
 export function computeRefutationReasonFact(
   posBefore: Chess,
   move: NormalMove,
-  boardAfter: Chess,
+  _boardAfter: Chess,
   evalBefore: EngineEval,
   evalAfter?: EngineEval | null,
   moveUci?: string | null
@@ -1405,24 +1730,27 @@ export function computeRefutationReasonFact(
   if (!bestMove || !isNormal(bestMove) || !posBefore.isLegal(bestMove)) return null;
 
   const bestSan = makeSan(posBefore, bestMove);
+  if (bestSan === makeSan(posBefore, move)) return null;
   const moverColor = posBefore.turn;
   const oppColor = opposite(moverColor);
-  let bestTo = bestMove.to;
+  const bestTo = normalizeMoveTo(posBefore, bestMove, moverColor);
   const pieceBefore = posBefore.board.get(bestMove.from);
-  if (pieceBefore && pieceBefore.role === "king" && posBefore.board[moverColor].has(bestMove.to)) {
-    bestTo = kingCastlesTo(moverColor, bestMove.to > bestMove.from ? "h" : "a");
-  }
 
   // 1. Best move captures a piece
   const targetBefore = posBefore.board.get(bestTo);
-  const isEnPassant = pieceBefore?.role === "pawn" && posBefore.epSquare === bestTo;
+  const isEnPassant =
+    pieceBefore?.role === "pawn" &&
+    posBefore.epSquare !== undefined &&
+    bestTo === posBefore.epSquare &&
+    !targetBefore;
   if (targetBefore && targetBefore.color === oppColor) {
     const targetName = targetBefore.role;
     const sqName = makeSquare(bestTo);
     return `Best move ${bestSan} captures the ${targetName} on ${sqName}.`;
   }
   if (isEnPassant) {
-    const sqName = makeSquare(bestTo);
+    const capSq = bestTo + (moverColor === "white" ? -8 : 8);
+    const sqName = makeSquare(capSq);
     return `Best move ${bestSan} captures the pawn on ${sqName}.`;
   }
 
@@ -1462,19 +1790,495 @@ export function computeRefutationReasonFact(
   }
 
   // 3. Best move develops a piece and prepares castling
-  const hasCastlingRights =
-    posBefore.castles.rook[moverColor].a !== undefined ||
-    posBefore.castles.rook[moverColor].h !== undefined;
-  if (hasCastlingRights && posBefore.fullmoves <= 12) {
+  if (hasCastlingRights(posBefore, moverColor) && posBefore.fullmoves <= 12) {
     if (pieceBefore && (pieceBefore.role === "knight" || pieceBefore.role === "bishop")) {
-      const startSqs =
-        moverColor === "white"
-          ? [1, 2, 5, 6] // b1, c1, f1, g1
-          : [57, 58, 61, 62]; // b8, c8, f8, g8
-      if (startSqs.includes(bestMove.from)) {
+      const startSqs = moverColor === "white" ? WHITE_START_MINORS : BLACK_START_MINORS;
+      if (startSqs.has(bestMove.from)) {
         const pieceName = pieceBefore.role;
         return `Best move ${bestSan} develops the ${pieceName} and prepares castling.`;
       }
+    }
+  }
+
+  // 4. Central pawn advance: space, tension, or pawn attack on a piece
+  if (pieceBefore && pieceBefore.role === "pawn") {
+    const playedIsPawnCapture = isPawnTakesPawn(posBefore, move);
+    const playedTo = move.to;
+    const playedToSq = makeSquare(playedTo);
+
+    // 4a. Central pawn advance attacking an enemy non-pawn, non-king piece
+    if (isExtendedCenter(bestTo) && bestPieceAfter) {
+      interface AttackedTarget {
+        val: number;
+        sq: number;
+        role: Role;
+      }
+      const attackedTargets: AttackedTarget[] = [];
+      for (const tSq of attacks(bestPieceAfter, bestTo, sim.board.occupied)) {
+        const target = sim.board.get(tSq);
+        if (
+          target &&
+          target.color === oppColor &&
+          target.role !== "pawn" &&
+          target.role !== "king" &&
+          posBefore.board.get(tSq) !== undefined
+        ) {
+          attackedTargets.push({ val: PIECE_VALUES[target.role], sq: tSq, role: target.role });
+        }
+      }
+      if (attackedTargets.length > 0) {
+        attackedTargets.sort((a, b) => (a.val !== b.val ? b.val - a.val : a.sq - b.sq));
+        const top = attackedTargets[0];
+        const tSqName = makeSquare(top.sq);
+        const targetName = top.role;
+        if (isCenter45(bestTo)) {
+          if (playedIsPawnCapture && CENTRAL_SQUARES.has(playedTo)) {
+            return `Best move ${bestSan} gains space and attacks the ${targetName} on ${tSqName} instead of trading in the center.`;
+          }
+          return `Best move ${bestSan} gains central space and attacks the ${targetName} on ${tSqName}.`;
+        }
+        return `Best move ${bestSan} attacks the ${targetName} on ${tSqName}.`;
+      }
+    }
+
+    // 4b. Space-gaining central or 4th/5th-rank pawn push
+    if (isCenter45(bestTo)) {
+      if (playedIsPawnCapture && isExtendedCenter(playedTo)) {
+        return `Best move ${bestSan} keeps central space and tension instead of trading on ${playedToSq}.`;
+      }
+      if (CENTRAL_SQUARES.has(bestTo)) {
+        return `Best move ${bestSan} claims central space on ${makeSquare(bestTo)}.`;
+      }
+      return `Best move ${bestSan} gains space and challenges the center.`;
+    }
+
+    // 4c. Solid tension-holding pawn move
+    if (isExtendedCenter(bestTo) && playedIsPawnCapture && CENTRAL_SQUARES.has(playedTo)) {
+      return `Best move ${bestSan} maintains central tension instead of trading on ${playedToSq}.`;
+    }
+  }
+
+  // 5. Best move castles to keep the king safe
+  if (isCastlingMove(posBefore, bestMove)) {
+    return `Best move ${bestSan} castles to keep the king safe.`;
+  }
+
+  // 6. Best move saves an attacked piece
+  if (
+    pieceBefore &&
+    (pieceBefore.role === "knight" ||
+      pieceBefore.role === "bishop" ||
+      pieceBefore.role === "rook" ||
+      pieceBefore.role === "queen")
+  ) {
+    const pieceName = pieceBefore.role;
+    const wasAttacked = posBefore.kingAttackers(bestMove.from, oppColor, posBefore.board.occupied).nonEmpty();
+    const stillAttacked = sim.kingAttackers(bestTo, oppColor, sim.board.occupied).nonEmpty();
+    if (wasAttacked && !stillAttacked) {
+      return `Best move ${bestSan} moves the attacked ${pieceName} to safety.`;
+    }
+
+    // 7. Piece centralization, open file, or activity gain
+    if (CENTRAL_SQUARES.has(bestTo) && !CENTRAL_SQUARES.has(bestMove.from)) {
+      return `Best move ${bestSan} centralizes the ${pieceName}.`;
+    }
+
+    if (pieceBefore.role === "rook") {
+      const rookFileKind = classifyRookFileMove(posBefore, sim, bestMove.from, bestTo, moverColor);
+      if (rookFileKind === "open") {
+        return `Best move ${bestSan} places the rook on an open file.`;
+      }
+      if (rookFileKind === "half-open") {
+        return `Best move ${bestSan} places the rook on a half-open file.`;
+      }
+    }
+
+    const mobilityBefore = pieceMobility(posBefore, bestMove.from);
+    const mobilityAfter = pieceMobility(sim, bestTo);
+    if (mobilityAfter >= mobilityBefore + 2) {
+      return `Best move ${bestSan} increases ${pieceName} activity.`;
+    }
+  }
+
+  return null;
+}
+
+/** Compute material point difference from moverColor perspective. */
+function moverNetMaterial(pos: Chess, moverColor: Color): number {
+  let net = 0;
+  for (let sq = 0; sq < 64; sq++) {
+    const p = pos.board.get(sq);
+    if (!p || p.role === "king") continue;
+    const val = PIECE_VALUES[p.role];
+    net += p.color === moverColor ? val : -val;
+  }
+  return net;
+}
+
+/** Count opponent non-pawn, non-king pieces on the four center squares. */
+function countOppCentralPieces(pos: Chess, oppColor: Color): number {
+  let count = 0;
+  for (const sq of CENTRAL_SQUARES) {
+    const p = pos.board.get(sq);
+    if (p && p.color === oppColor && p.role !== "pawn" && p.role !== "king") {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Count mover pawns on the center squares and fifth-rank extended center. */
+function countMoverCentralPawns(pos: Chess, moverColor: Color): number {
+  const rank5 = moverColor === "white" ? 4 : 3;
+  let count = 0;
+  for (const sq of pos.board.pawn.intersect(pos.board[moverColor])) {
+    const f = squareFile(sq);
+    const r = squareRank(sq);
+    if (CENTRAL_SQUARES.has(sq) || (r === rank5 && f >= 2 && f <= 5)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Compute net non-pawn, non-king mobility difference for moverColor. */
+function netPieceMobility(pos: Chess, moverColor: Color): number {
+  const oppColor = opposite(moverColor);
+  let moverMob = 0;
+  let oppMob = 0;
+  const pieceSet = pos.board.knight.union(pos.board.bishop).union(pos.board.rook).union(pos.board.queen);
+  for (const sq of pieceSet.intersect(pos.board[moverColor])) {
+    moverMob += pieceMobility(pos, sq);
+  }
+  for (const sq of pieceSet.intersect(pos.board[oppColor])) {
+    oppMob += pieceMobility(pos, sq);
+  }
+  return moverMob - oppMob;
+}
+
+/** Settle one recapture ply when the horizon ends in a capture. */
+function settledMaterial(
+  statesMeta: Array<{ pos: Chess; wasCap: boolean; toSq: number }>,
+  pvMoves: string[],
+  commonPlies: number,
+  moverColor: Color,
+  nextPvIdx: number
+): number {
+  const { pos: eqBoard, wasCap, toSq: capToSq } = statesMeta[commonPlies - 1];
+  if (wasCap && nextPvIdx >= 0 && nextPvIdx < pvMoves.length) {
+    const nextMove = parseUci(pvMoves[nextPvIdx]);
+    if (
+      nextMove &&
+      isNormal(nextMove) &&
+      !isKingTakesFriendlyRook(eqBoard, nextMove) &&
+      eqBoard.isLegal(nextMove) &&
+      isCaptureMove(eqBoard, nextMove) &&
+      normalizeMoveTo(eqBoard, nextMove) === capToSq
+    ) {
+      const settled = eqBoard.clone();
+      settled.play(nextMove);
+      return moverNetMaterial(settled, moverColor);
+    }
+  }
+  return moverNetMaterial(eqBoard, moverColor);
+}
+
+/**
+ * Compare key positional or material differences between played and best lines.
+ * Simulate up to four plies from posBefore for both lines on bad moves.
+ * Report the highest priority concrete difference.
+ */
+export function computeLineComparisonFact(
+  posBefore: Chess,
+  move: NormalMove,
+  boardAfter: Chess,
+  evalBefore: EngineEval,
+  evalAfter?: EngineEval | null,
+  moveUci?: string | null
+): string | null {
+  const actualMoveUci =
+    moveUci ??
+    `${makeSquare(move.from)}${makeSquare(move.to)}${move.promotion ? roleToChar(move.promotion) : ""}`;
+  const verdict = classifyVerdict(evalBefore, evalAfter, actualMoveUci, posBefore);
+  if (verdict !== "Inaccuracy" && verdict !== "Mistake" && verdict !== "Blunder") {
+    return null;
+  }
+  if (!evalAfter) return null;
+
+  const pvsBefore = evalBefore.pvs ?? [];
+  const pvsAfter = evalAfter.pvs ?? [];
+  if (pvsBefore.length === 0 || !pvsBefore[0].moves || pvsBefore[0].moves.length === 0) return null;
+  if (pvsAfter.length === 0 || !pvsAfter[0].moves || pvsAfter[0].moves.length === 0) return null;
+
+  const bestUci = pvsBefore[0].moves[0];
+  if (bestUci === actualMoveUci) return null;
+
+  const bestMove = parseUci(bestUci);
+  if (!bestMove || !isNormal(bestMove) || !posBefore.isLegal(bestMove)) return null;
+
+  const moveSan = makeSan(posBefore, move);
+  const bestSan = makeSan(posBefore, bestMove);
+  if (bestSan === moveSan) return null;
+
+  const moverColor = posBefore.turn;
+  const oppColor = opposite(moverColor);
+  const moverName = moverColor === "white" ? "White" : "Black";
+  const oppName = moverColor === "white" ? "Black" : "White";
+
+  const playedPvMoves = pvsAfter[0].moves;
+  const playedSim = boardAfter.clone();
+  let moverCastledPlayed = isCastlingMove(posBefore, move);
+  const playedStatesMeta: Array<{ pos: Chess; wasCap: boolean; toSq: number }> = [
+    {
+      pos: playedSim.clone(),
+      wasCap: isCaptureMove(posBefore, move),
+      toSq: normalizeMoveTo(posBefore, move, moverColor),
+    },
+  ];
+  const playedCastledAtPly: boolean[] = [moverCastledPlayed];
+  for (const uci of playedPvMoves.slice(0, 3)) {
+    const m = parseUci(uci);
+    if (!m || !isNormal(m) || !playedSim.isLegal(m)) break;
+    if (playedSim.turn === moverColor && isCastlingMove(playedSim, m)) {
+      moverCastledPlayed = true;
+    }
+    const wasCap = isCaptureMove(playedSim, m);
+    const toSq = normalizeMoveTo(playedSim, m, playedSim.turn);
+    playedSim.play(m);
+    playedStatesMeta.push({ pos: playedSim.clone(), wasCap, toSq });
+    playedCastledAtPly.push(moverCastledPlayed);
+  }
+
+  const bestPvMoves = pvsBefore[0].moves;
+  const bestSim = posBefore.clone();
+  let moverCastledBest = false;
+  const bestStatesMeta: Array<{ pos: Chess; wasCap: boolean; toSq: number }> = [];
+  const bestCastledAtPly: boolean[] = [];
+  for (const uci of bestPvMoves.slice(0, 4)) {
+    const m = parseUci(uci);
+    if (!m || !isNormal(m) || !bestSim.isLegal(m)) break;
+    if (bestSim.turn === moverColor && isCastlingMove(bestSim, m)) {
+      moverCastledBest = true;
+    }
+    const wasCap = isCaptureMove(bestSim, m);
+    const toSq = normalizeMoveTo(bestSim, m, bestSim.turn);
+    bestSim.play(m);
+    bestStatesMeta.push({ pos: bestSim.clone(), wasCap, toSq });
+    bestCastledAtPly.push(moverCastledBest);
+  }
+
+  if (bestStatesMeta.length === 0) return null;
+
+  // 0. Checkmate delivered or avoided
+  const bestFinal = bestStatesMeta[bestStatesMeta.length - 1].pos;
+  const playedFinal = playedStatesMeta[playedStatesMeta.length - 1].pos;
+  const bestMateByMover = bestFinal.isCheckmate() && bestFinal.turn === oppColor;
+  const playedMateByMover = playedFinal.isCheckmate() && playedFinal.turn === oppColor;
+  const playedMateByOpp = playedFinal.isCheckmate() && playedFinal.turn === moverColor;
+  const bestMateByOpp = bestFinal.isCheckmate() && bestFinal.turn === moverColor;
+
+  if (bestMateByMover && !playedMateByMover) {
+    return `Unlike ${moveSan}, the best line with ${bestSan} leads to checkmate.`;
+  }
+  if (playedMateByOpp && !bestMateByOpp) {
+    return `Unlike ${moveSan}, ${bestSan} avoids checkmate.`;
+  }
+
+  // Equalize ply count across simulated lines before comparing state metrics
+  let commonPlies = Math.min(playedStatesMeta.length, bestStatesMeta.length);
+  if (commonPlies % 2 === 1) {
+    commonPlies -= 1;
+  }
+  if (commonPlies < 2) return null;
+
+  const playedEq = playedStatesMeta[commonPlies - 1].pos;
+  const bestEq = bestStatesMeta[commonPlies - 1].pos;
+  moverCastledPlayed = playedCastledAtPly[commonPlies - 1];
+  moverCastledBest = bestCastledAtPly[commonPlies - 1];
+
+  // 1. Material difference (settle 1 immediate recapture ply when horizon ends in a capture)
+  const matBefore = moverNetMaterial(posBefore, moverColor);
+  const matPlayed = settledMaterial(
+    playedStatesMeta,
+    playedPvMoves,
+    commonPlies,
+    moverColor,
+    commonPlies - 1
+  );
+  const matBest = settledMaterial(
+    bestStatesMeta,
+    bestPvMoves,
+    commonPlies,
+    moverColor,
+    commonPlies
+  );
+  const matDiff = matBest - matPlayed;
+  if (matDiff >= 1) {
+    if (matDiff >= 2) {
+      if (matPlayed < matBefore) {
+        return `Unlike ${moveSan}, the best line with ${bestSan} avoids losing material.`;
+      }
+      return `Unlike ${moveSan}, the best line with ${bestSan} wins material.`;
+    }
+    if (matPlayed < matBefore) {
+      return `Unlike ${moveSan}, the best line with ${bestSan} avoids losing a pawn.`;
+    }
+    return `Unlike ${moveSan}, the best line with ${bestSan} wins a pawn.`;
+  }
+
+  // 2. Opponent centralization
+  if (countOppCentralPieces(playedEq, oppColor) > countOppCentralPieces(bestEq, oppColor)) {
+    return `Unlike ${moveSan}, ${bestSan} prevents ${oppName} from centralizing pieces.`;
+  }
+
+  // 3. Mover central pawn control
+  if (countMoverCentralPawns(bestEq, moverColor) > countMoverCentralPawns(playedEq, moverColor)) {
+    return `Unlike ${moveSan}, ${bestSan} keeps stronger central pawn control.`;
+  }
+
+  // 4. King safety
+  const playedInCheck = playedEq.turn === moverColor && playedEq.isCheck();
+  const bestInCheck = bestEq.turn === moverColor && bestEq.isCheck();
+  if ((moverCastledBest && !moverCastledPlayed) || (playedInCheck && !bestInCheck)) {
+    return `Unlike ${moveSan}, ${bestSan} gives ${moverName} better king safety.`;
+  }
+
+  // 5. Piece activity
+  if (netPieceMobility(bestEq, moverColor) - netPieceMobility(playedEq, moverColor) >= 4) {
+    return `Unlike ${moveSan}, ${bestSan} leaves ${moverName} with more active pieces.`;
+  }
+
+  return null;
+}
+
+/**
+ * Compute a positional fact describing what a quiet or strategic move does.
+ */
+export function computeMovePositionalFact(
+  posBefore: Chess,
+  move: NormalMove,
+  posAfter: Chess
+): string | null {
+  const moveSan = makeSan(posBefore, move);
+  const moverColor = posBefore.turn;
+  const piece = posBefore.board.get(move.from);
+  if (!piece) return null;
+
+  if (isCastlingMove(posBefore, move)) {
+    return `${moveSan} castles to safeguard the king.`;
+  }
+
+  const toSq = normalizeMoveTo(posBefore, move, moverColor);
+  const toSqName = makeSquare(toSq);
+
+  if (piece.role === "pawn") {
+    const isCap = isCaptureMove(posBefore, move);
+    if (isPawnTakesPawn(posBefore, move) && CENTRAL_SQUARES.has(toSq)) {
+      return `${moveSan} releases central tension on ${toSqName}.`;
+    }
+    if (!isCap && CENTRAL_SQUARES.has(toSq)) {
+      return `${moveSan} claims central space on ${toSqName}.`;
+    }
+    if (!isCap && WING_CENTER_45_SQUARES.has(toSq)) {
+      return `${moveSan} gains space and challenges the center.`;
+    }
+    return null;
+  }
+
+  const pieceName = piece.role;
+  if (piece.role === "knight" || piece.role === "bishop") {
+    const startSqs = moverColor === "white" ? WHITE_START_MINORS : BLACK_START_MINORS;
+    if (startSqs.has(move.from) && isExtendedCenter(toSq)) {
+      return `${moveSan} develops the ${pieceName} toward the center.`;
+    }
+  }
+
+  if (
+    piece.role === "knight" ||
+    piece.role === "bishop" ||
+    piece.role === "rook" ||
+    piece.role === "queen"
+  ) {
+    if (CENTRAL_SQUARES.has(toSq) && !CENTRAL_SQUARES.has(move.from)) {
+      return `${moveSan} centralizes the ${pieceName}.`;
+    }
+  }
+
+  if (piece.role === "rook") {
+    const rookFileKind = classifyRookFileMove(posBefore, posAfter, move.from, toSq, moverColor);
+    if (rookFileKind !== null) {
+      const fileLetter = FILE_LETTERS[squareFile(toSq)];
+      if (rookFileKind === "open") {
+        return `${moveSan} places the rook on the open ${fileLetter}-file.`;
+      }
+      return `${moveSan} places the rook on the half-open ${fileLetter}-file.`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Compute one structural or positional fact about the current board.
+ */
+export function computePositionStructureFact(pos: Chess): string | null {
+  // 1. Central pawn tension
+  const whiteC4F4 = [26, 27, 28, 29]; // c4, d4, e4, f4
+  const blackC5F5 = [34, 35, 36, 37]; // c5, d5, e5, f5
+  for (const wSq of whiteC4F4) {
+    const wp = pos.board.get(wSq);
+    if (wp && wp.color === "white" && wp.role === "pawn") {
+      const wFile = squareFile(wSq);
+      for (const bSq of blackC5F5) {
+        const bp = pos.board.get(bSq);
+        if (bp && bp.color === "black" && bp.role === "pawn") {
+          if (Math.abs(wFile - squareFile(bSq)) === 1) {
+            return `Central pawn tension exists between ${makeSquare(wSq)} and ${makeSquare(bSq)}.`;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Central space advantage
+  let wSpace = 0;
+  for (const sq of pos.board.pawn.intersect(pos.board.white)) {
+    const f = squareFile(sq);
+    const r = squareRank(sq);
+    if (f >= 2 && f <= 5 && r >= 3 && r <= 5) wSpace++;
+  }
+  let bSpace = 0;
+  for (const sq of pos.board.pawn.intersect(pos.board.black)) {
+    const f = squareFile(sq);
+    const r = squareRank(sq);
+    if (f >= 2 && f <= 5 && r >= 2 && r <= 4) bSpace++;
+  }
+  if (Math.abs(wSpace - bSpace) >= 2) {
+    const leader = wSpace > bSpace ? "White" : "Black";
+    return `${leader} has more central space.`;
+  }
+
+  // 3. Open central file (d-file, then e-file)
+  for (const fileIdx of [3, 4]) {
+    if (countPawnsOnFile(pos, fileIdx) === 0) {
+      return `The ${FILE_LETTERS[fileIdx]}-file is open.`;
+    }
+  }
+
+  // 4. Opening development lead
+  if (pos.fullmoves <= 12) {
+    const minors = pos.board.knight.union(pos.board.bishop);
+    let wDev = 0;
+    for (const sq of minors.intersect(pos.board.white)) {
+      if (!WHITE_START_MINORS.has(sq)) wDev++;
+    }
+    let bDev = 0;
+    for (const sq of minors.intersect(pos.board.black)) {
+      if (!BLACK_START_MINORS.has(sq)) bDev++;
+    }
+    if (Math.abs(wDev - bDev) >= 2) {
+      const leader = wDev > bDev ? "White" : "Black";
+      return `${leader} leads in piece development.`;
     }
   }
 
@@ -1484,14 +2288,15 @@ export function computeRefutationReasonFact(
 /**
  * Append shared position facts to rawFacts.
  * Extract hanging pieces, checks, captures, threats, and king safety.
- * Extract material balance, phase, and opening facts.
+ * Extract position structure, material balance, phase, and opening facts.
  */
 export function appendPositionFacts(
   board: Chess,
   fen: string,
   moveUci: string | null | undefined,
   rawFacts: Array<string | null>,
-  parsedPosBefore?: Chess
+  parsedPosBefore?: Chess,
+  engineEval?: EngineEval | null
 ): void {
   let posBefore = parsedPosBefore;
   if (!posBefore) {
@@ -1506,7 +2311,7 @@ export function appendPositionFacts(
     rawFacts.push(f);
   }
 
-  for (const f of computeChecksAndCapturesFacts(board)) {
+  for (const f of computeChecksAndCapturesFacts(board, engineEval)) {
     rawFacts.push(f);
   }
 
@@ -1516,6 +2321,7 @@ export function appendPositionFacts(
     rawFacts.push(f);
   }
 
+  rawFacts.push(computePositionStructureFact(board));
   rawFacts.push(computeMaterialFact(board));
   rawFacts.push(computePhaseFact(posBefore));
 
@@ -1558,8 +2364,8 @@ export function extractFacts(
       throw new Error("move_uci is required for task explain_move");
     }
     const move = parseUci(moveUci);
-    if (!move || !isNormal(move)) {
-      throw new Error(`Invalid UCI move: ${moveUci}`);
+    if (!move || !isNormal(move) || isKingTakesFriendlyRook(posBefore, move) || !posBefore.isLegal(move)) {
+      throw new Error(`Invalid or illegal move_uci: ${moveUci}`);
     }
     const posAfter = posBefore.clone();
     posAfter.play(move);
@@ -1572,16 +2378,25 @@ export function extractFacts(
       rawFacts.push(f);
     }
 
-    // Tactical motifs
+    // 4. Opponent recapture centralization or activity gain
+    rawFacts.push(computeRecaptureActivityFact(posBefore, move, posAfter, evalAfter));
+
+    // 5. Tactical motifs
     rawFacts.push(computeForkFact(posBefore, move, posAfter, evalAfter));
     rawFacts.push(computePinFact(posBefore, move, posAfter, evalAfter));
     rawFacts.push(computeSkewerFact(posBefore, move, posAfter, evalAfter));
     rawFacts.push(computeDiscoveredAttackFact(posBefore, move, posAfter));
     rawFacts.push(computeMateThreatFact(posBefore, move, posAfter, evalAfter));
-    rawFacts.push(computeRefutationReasonFact(posBefore, move, posAfter, evalBefore, evalAfter, moveUci));
 
-    // Shared position facts
-    appendPositionFacts(posAfter, fen, moveUci, rawFacts, posBefore);
+    // 6. Refutation reason and line comparison
+    rawFacts.push(computeRefutationReasonFact(posBefore, move, posAfter, evalBefore, evalAfter, moveUci));
+    rawFacts.push(computeLineComparisonFact(posBefore, move, posAfter, evalBefore, evalAfter, moveUci));
+
+    // 7. Move positional fact
+    rawFacts.push(computeMovePositionalFact(posBefore, move, posAfter));
+
+    // 8. Shared position facts
+    appendPositionFacts(posAfter, fen, moveUci, rawFacts, posBefore, evalAfter);
   } else if (task === "explain_position") {
     // 1. Candidate moves fact
     const pvs = evalBefore.pvs ?? [];
@@ -1604,8 +2419,8 @@ export function extractFacts(
       }
     }
 
-    // 2-8. Shared position facts
-    appendPositionFacts(posBefore, fen, null, rawFacts, posBefore);
+    // 2-9. Shared position facts
+    appendPositionFacts(posBefore, fen, null, rawFacts, posBefore, evalBefore);
   } else {
     throw new Error(`Unknown task: ${task}`);
   }
